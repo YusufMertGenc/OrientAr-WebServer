@@ -1,0 +1,20 @@
+[
+  {
+    "id": "cafeteria_1",
+    "entity": "cafeteria",
+    "type": "location",
+    "text": "The main campus cafeteria is located near the library building and serves breakfast, lunch, and dinner on weekdays."
+  },
+  {
+    "id": "dormitory_1",
+    "entity": "dormitory",
+    "type": "location",
+    "text": "The student dormitories are located on the north side of the campus, within walking distance of the main faculty buildings."
+  },
+  {
+    "id": "library_1",
+    "entity": "library",
+    "type": "hours_info",
+    "text": "The central library is open from 8:30 to 22:00 on weekdays and from 10:00 to 18:00 on weekends during the semester."
+  }
+]
