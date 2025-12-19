@@ -2,11 +2,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import ChatRequest, ChatResponse
-from .rag import load_kb_to_chroma, rag_query_with_scores
+from .rag import rag_query_with_scores
 from .llm_client import generate_intent_response
 
 
-app = FastAPI(title="OrientAR Chatbot API", version="0.4.0")
+app = FastAPI(title="OrientAR Chatbot API", version="0.4.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,11 +15,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def startup_event():
-    load_kb_to_chroma()
 
 
 @app.get("/health")
@@ -43,4 +38,3 @@ def chatbot_query(req: ChatRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
