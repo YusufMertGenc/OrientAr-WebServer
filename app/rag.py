@@ -4,32 +4,8 @@ from typing import Dict, List
 
 import requests
 from chromadb import PersistentClient
-from chromadb.utils import embedding_functions
 
 from .config import settings
-
-
-# ---- Ollama embedding wrapper ----
-class OllamaEmbeddingFunction:
-    def name(self) -> str:
-        return "ollama-nomic-embed-text"
-
-    def __call__(self, texts: List[str]) -> List[List[float]]:
-        embeddings = []
-        for text in texts:
-            resp = requests.post(
-                f"{settings.embedding_base_url}/api/embeddings",
-                json={
-                    "model": settings.embedding_model,
-                    "prompt": text
-                },
-                timeout=60
-            )
-            resp.raise_for_status()
-            embeddings.append(resp.json()["embedding"])
-        return embeddings
-
-
 
 
 # ---- Paths ----
@@ -39,13 +15,23 @@ _data_path = _base_dir / "data" / "campus_kb.json"
 
 # ---- Chroma ----
 _chroma_client = PersistentClient(path=settings.chroma_dir)
+_collection = _chroma_client.get_or_create_collection("campus_kb")
 
-_embedding_fn = OllamaEmbeddingFunction()
 
-_collection = _chroma_client.get_or_create_collection(
-    name="campus_kb",
-    embedding_function=_embedding_fn
-)
+def ollama_embed(texts: List[str]) -> List[List[float]]:
+    embeddings = []
+    for text in texts:
+        resp = requests.post(
+            f"{settings.embedding_base_url}/api/embeddings",
+            json={
+                "model": settings.embedding_model,
+                "prompt": text
+            },
+            timeout=60
+        )
+        resp.raise_for_status()
+        embeddings.append(resp.json()["embedding"])
+    return embeddings
 
 
 def load_kb_to_chroma():
@@ -58,25 +44,28 @@ def load_kb_to_chroma():
     ids = [item["id"] for item in kb_items]
     docs = [item["text"] for item in kb_items]
     metas = [
-        {
-            "entity": item["entity"],
-            "type": item["type"]
-        }
+        {"entity": item["entity"], "type": item["type"]}
         for item in kb_items
     ]
 
+    # 🔥 ÖNEMLİ: tamamen temizle
     _collection.delete(where={})
+
+    embeddings = ollama_embed(docs)
 
     _collection.add(
         ids=ids,
         documents=docs,
+        embeddings=embeddings,
         metadatas=metas
     )
 
 
 def rag_query_with_scores(question: str, top_k: int = 5) -> Dict:
+    query_embedding = ollama_embed([question])[0]
+
     results = _collection.query(
-        query_texts=[question],
+        query_embeddings=[query_embedding],
         n_results=top_k,
         include=["documents", "metadatas", "distances"]
     )
