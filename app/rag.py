@@ -20,13 +20,17 @@ def _embed_question(question: str) -> list[float]:
     Get embedding from local Ollama (via ngrok)
     """
     resp = requests.post(
-        f"{settings.embedding_base_url}/api/embeddings",
-        json={
-            "model": settings.embedding_model,
-            "prompt": question
-        },
-        timeout=30
-    )
+    f"{settings.embedding_base_url}/api/embeddings",
+    headers={
+        "ngrok-skip-browser-warning": "true"
+    },
+    json={
+        "model": settings.embedding_model,
+        "prompt": question
+    },
+    timeout=30
+)
+
     resp.raise_for_status()
     return resp.json()["embedding"]
 
