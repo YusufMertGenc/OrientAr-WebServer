@@ -62,7 +62,7 @@ def load_kb_to_chroma():
         embeddings=embeddings
     )
 
-def rag_query_with_scores(question: str, top_k: int = 5, max_distance: float = 0.8) -> Dict:
+def rag_query_with_scores(question: str, top_k: int = 5) -> Dict:
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
@@ -71,22 +71,8 @@ def rag_query_with_scores(question: str, top_k: int = 5, max_distance: float = 0
         include=["documents", "metadatas", "distances"]
     )
 
-    docs = []
-    metas = []
-    dists = []
-
-    for doc, meta, dist in zip(
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0]
-    ):
-        if dist <= max_distance:
-            docs.append(doc)
-            metas.append(meta)
-            dists.append(dist)
-
     return {
-        "documents": docs,
-        "metadatas": metas,
-        "distances": dists,
+        "documents": results["documents"][0],
+        "metadatas": results["metadatas"][0],
+        "distances": results["distances"][0],
     }
