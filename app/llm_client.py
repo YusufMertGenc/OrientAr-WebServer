@@ -46,11 +46,24 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
             {"role": "system", "content": INTENT_SYSTEM_PROMPT},
             {"role": "user", "content": build_intent_prompt(question, context_passages)}
         ],
-        "temperature": 0.2
+        "temperature": 0.2,
+        "stream": False
     }
 
-    resp = requests.post(settings.llm_base_url, json=payload, timeout=30)
+    resp = requests.post(
+        f"{settings.llm_base_url}/api/chat",
+        json=payload,
+        timeout=120
+    )
     resp.raise_for_status()
 
-    raw = resp.json()["choices"][0]["message"]["content"]
-    return json.loads(raw)
+    raw = resp.json()["message"]["content"]
+
+    # LLM'in JSON dışı saçmalık yapma ihtimaline karşı güvenli parse
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "message": raw,
+            "confidence": 0.5
+        }
