@@ -14,7 +14,7 @@ _data_path = _base_dir / "data" / "campus_kb.json"
 
 
 # ---- Chroma ----
-_chroma_client = PersistentClient(path=settings.chroma_dir)
+_chroma_client = PersistentClient(path=settings.chroma_path)
 _collection = _chroma_client.get_or_create_collection("campus_kb")
 
 
