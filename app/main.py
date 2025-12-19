@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import ChatRequest, ChatResponse
-from .rag import rag_query_with_scores
+from .rag import rag_query_with_scores, load_kb_to_chroma
 from .llm_client import generate_intent_response
 
 
@@ -15,6 +15,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ✅ BURASI: STARTUP EVENT
+@app.on_event("startup")
+def startup_event():
+    load_kb_to_chroma()
 
 
 @app.get("/health")
