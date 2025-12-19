@@ -30,8 +30,9 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
             timeout=60
         )
         resp.raise_for_status()
-        embeddings.append(resp.json()["embedding"])
+        embeddings.append(resp.json()["data"][0]["embedding"])
     return embeddings
+
 
 
 def load_kb_to_chroma():
