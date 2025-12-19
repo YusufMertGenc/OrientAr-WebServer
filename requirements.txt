@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
-sentence-transformers
+pydantic-settings
 chromadb
 requests
 python-dotenv
