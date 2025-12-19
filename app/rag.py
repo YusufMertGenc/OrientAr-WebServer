@@ -56,10 +56,9 @@ def load_kb_to_chroma():
     _collection.add(
         ids=ids,
         documents=docs,
-        embeddings=embeddings,
-        metadatas=metas
+        metadatas=metas,
+        embeddings=embeddings
     )
-
 
 def rag_query_with_scores(question: str, top_k: int = 5, max_distance: float = 0.8) -> Dict:
     query_embedding = ollama_embed([question])[0]
