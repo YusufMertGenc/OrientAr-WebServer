@@ -11,6 +11,9 @@ from .config import settings
 
 # ---- Ollama embedding wrapper ----
 class OllamaEmbeddingFunction:
+    def name(self) -> str:
+        return "ollama-nomic-embed-text"
+
     def __call__(self, texts: List[str]) -> List[List[float]]:
         embeddings = []
         for text in texts:
@@ -25,6 +28,8 @@ class OllamaEmbeddingFunction:
             resp.raise_for_status()
             embeddings.append(resp.json()["embedding"])
         return embeddings
+
+
 
 
 # ---- Paths ----
