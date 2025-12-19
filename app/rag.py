@@ -50,8 +50,13 @@ def load_kb_to_chroma():
         for item in kb_items
     ]
 
-    # ✅ DOĞRU TEMİZLEME
-    _collection.delete()
+    # ✅ GÜVENLİ TEMİZLEME (CHROMA COMPATIBLE)
+    try:
+        existing = _collection.get(include=[])
+        if existing["ids"]:
+            _collection.delete(ids=existing["ids"])
+    except Exception:
+        pass
 
     embeddings = ollama_embed(docs)
 
