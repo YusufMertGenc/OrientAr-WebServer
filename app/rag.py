@@ -50,8 +50,8 @@ def load_kb_to_chroma():
         for item in kb_items
     ]
 
-    # 🔥 ÖNEMLİ: tamamen temizle
-    _collection.delete(where={})
+    # ✅ DOĞRU TEMİZLEME
+    _collection.delete()
 
     embeddings = ollama_embed(docs)
 
@@ -61,7 +61,9 @@ def load_kb_to_chroma():
         metadatas=metas,
         embeddings=embeddings
     )
+
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
+
 
 
 def rag_query_with_scores(question: str, top_k: int = 5) -> Dict:
