@@ -7,6 +7,7 @@ from chromadb import PersistentClient
 
 from .config import settings
 
+_initialized = False
 
 # ---- Paths ----
 _base_dir = Path(__file__).resolve().parent.parent
@@ -65,6 +66,11 @@ def load_kb_to_chroma():
 
 
 def rag_query_with_scores(question: str, top_k: int = 5) -> Dict:
+    global _initialized
+    if not _initialized:
+        load_kb_to_chroma()
+        _initialized = True
+
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
