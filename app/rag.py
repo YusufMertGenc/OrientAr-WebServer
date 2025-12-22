@@ -44,7 +44,7 @@ def load_kb_to_chroma():
         kb_items = json.load(f)
 
     ids = [item["id"] for item in kb_items]
-    docs = [item["text"] for item in kb_items]
+    docs = [item["content"] for item in kb_items]
     metas = [
         {"entity": item["entity"], "type": item["type"]}
         for item in kb_items
