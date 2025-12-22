@@ -34,8 +34,6 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
     return embeddings
 
 
-
-
 def load_kb_to_chroma():
     if not _data_path.exists():
         raise FileNotFoundError("campus_kb.json not found")
@@ -43,14 +41,16 @@ def load_kb_to_chroma():
     with open(_data_path, "r", encoding="utf-8") as f:
         kb_items = json.load(f)
 
+    # ---- CORE DATA ----
     ids = [item["id"] for item in kb_items]
     docs = [item["content"] for item in kb_items]
-    metas = [
-        {"entity": item["entity"], "type": item["type"]}
-        for item in kb_items
-    ]
 
-    # ✅ GÜVENLİ TEMİZLEME (CHROMA COMPATIBLE)
+    # ---- METADATA (OPTIONAL, SAFE) ----
+    # Metadata retrieval için kullanılmıyor.
+    # Sadece debug / trace amaçlı.
+    metas = [{"id": item["id"]} for item in kb_items]
+
+    # ---- CLEAN EXISTING COLLECTION ----
     try:
         existing = _collection.get(include=[])
         if existing["ids"]:
@@ -58,6 +58,7 @@ def load_kb_to_chroma():
     except Exception:
         pass
 
+    # ---- EMBEDDINGS ----
     embeddings = ollama_embed(docs)
 
     _collection.add(
@@ -70,19 +71,16 @@ def load_kb_to_chroma():
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
 
-
 def rag_query_with_scores(question: str, top_k: int = 5) -> Dict:
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
-        include=["documents", "metadatas", "distances"]
+        include=["documents", "distances"]  # metadatas şart değil
     )
 
     return {
         "documents": results["documents"][0],
-        "metadatas": results["metadatas"][0],
         "distances": results["distances"][0],
     }
-
