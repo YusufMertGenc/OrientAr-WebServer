@@ -1,20 +1,122 @@
 [
   {
-    "id": "cafeteria_1",
-    "entity": "cafeteria",
-    "type": "location",
-    "text": "The main campus cafeteria is located near the library building and serves breakfast, lunch, and dinner on weekdays."
+    "id": "metu_ncc_overview",
+    "content": "Middle East Technical University Northern Cyprus Campus (METU NCC) is the first overseas campus of a Turkish university. It was founded following an invitation by the governments of the Republic of Türkiye and the Turkish Republic of Northern Cyprus, with the foundation law adopted in 2003."
   },
   {
-    "id": "dormitory_1",
-    "entity": "dormitory",
-    "type": "location",
-    "text": "The student dormitories are located on the north side of the campus, within walking distance of the main faculty buildings."
+    "id": "metu_ncc_location",
+    "content": "METU Northern Cyprus Campus is located in the Güzelyurt district of North Cyprus."
   },
   {
-    "id": "library_1",
-    "entity": "library",
-    "type": "hours_info",
-    "text": "The central library is open from 8:30 to 22:00 on weekdays and from 10:00 to 18:00 on weekends during the semester."
+    "id": "metu_ncc_programs",
+    "content": "METU NCC offers 15 undergraduate and 5 graduate programs, providing the same academic quality and standards as the main campus in Ankara, Türkiye."
+  },
+
+  {
+    "id": "library_rules_general",
+    "content": "Food, beverages, and smoking are not allowed in the library. Users are responsible for their belongings, and the library is not responsible for theft or losses."
+  },
+  {
+    "id": "library_rules_mobile_phones",
+    "content": "Users are required to switch off their mobile phones while inside the library."
+  },
+  {
+    "id": "library_rules_security",
+    "content": "Publications are protected with electronic security systems. No publications may be taken out of the library without permission, and legal measures will be taken against violations."
+  },
+
+  {
+    "id": "library_borrowing_id_requirement",
+    "content": "To borrow books from the library, users must present their current METU ID card at the circulation desk."
+  },
+  {
+    "id": "library_borrowing_limits_students",
+    "content": "METU NCC undergraduate students may borrow up to 15 books for 15 days, while graduate students may borrow up to 20 books for 30 days."
+  },
+  {
+    "id": "library_borrowing_limits_staff",
+    "content": "METU NCC academic staff and PhD students may borrow up to 25 books for 30 days, while administrative staff may borrow up to 15 books for 30 days."
+  },
+  {
+    "id": "library_multimedia_borrowing",
+    "content": "Academic and administrative staff may borrow up to 3 multimedia items for 3 days, while students may borrow up to 2 multimedia items for 3 days."
+  },
+  {
+    "id": "library_overdue_policy",
+    "content": "Members with overdue books cannot borrow new items until overdue materials are returned and fines are paid. Overdue books cannot be renewed."
+  },
+  {
+    "id": "library_reference_materials",
+    "content": "Reference books and periodicals cannot be borrowed and must be used only inside the library."
+  },
+  {
+    "id": "library_renewal_policy",
+    "content": "Academic staff and research assistants may renew borrowed items up to three times, while students may renew items up to two times unless the item is requested by another user."
+  },
+  {
+    "id": "library_short_loan_section",
+    "content": "Academic staff, administrative staff, and students can borrow materials from the Reserve (Short Loan Section) for periods ranging from 2 hours to one week, depending on the source."
+  },
+  {
+    "id": "library_easy_readings",
+    "content": "Students can borrow up to 3 books for 7 days at a time from the Easy Readings Collection."
+  },
+  {
+    "id": "library_working_hours",
+    "content": "The METU NCC Library is open daily from 08:30 to 23:30."
+  },
+
+  {
+    "id": "campus_market_macro",
+    "content": "Macro Market on campus sells basic food, cleaning, and consumer products and is managed by Macro Ltd. The contact telephone number is +90 392 661 1980-83."
+  },
+  {
+    "id": "campus_turkcell_office",
+    "content": "The Kuzey Kıbrıs Turkcell (Çınar Telekom) office provides GSM services, photocopying, printing, and stationery items for the campus community. The contact telephone number is +90 392 661 1967."
+  },
+  {
+    "id": "campus_bookstore",
+    "content": "The campus bookstore (Deniz Kırtasiye) sells textbooks recommended by academic units, stationery items, and provides photocopying and printing services. The contact telephone number is +90 392 661 2249."
+  },
+  {
+    "id": "campus_barber",
+    "content": "The campus barber provides hair cutting services. The contact telephone number is +90 392 661 1963."
+  },
+  {
+    "id": "campus_hairdresser",
+    "content": "The campus hairdresser provides hair styling services. The contact telephone number is +90 392 661 1964."
+  },
+  {
+    "id": "campus_bank",
+    "content": "The METU NCC branch of İşBank provides on-campus banking services on weekdays and has two ATM machines located in front of the bank. The contact telephone number is +90 392 661 1951-55."
+  },
+  {
+    "id": "campus_post_office",
+    "content": "The on-campus post office, a branch of the TRNC Post Office, provides all postal services to the campus community. The contact telephone number is +90 392 661 1977."
+  },
+
+  {
+    "id": "dining_hall_a_la_carte",
+    "content": "The à la carte and table d'hôte dining hall offers fixed-price menus including main and side dishes, soup, salad or yoghurt, and fruit or dessert."
+  },
+  {
+    "id": "main_cafeteria_kirlangic",
+    "content": "The main cafeteria operated by Kırlangıç Catering offers fast food, grill selections, breakfast menus, cookies, cakes, and hot and cold beverages."
+  },
+  {
+    "id": "sfl_dormitory_canteens",
+    "content": "Canteens located in the School of Foreign Languages (SFL) and Dormitory I and II buildings serve fast food and hot and cold beverages."
+  },
+  {
+    "id": "dormitory_iii_canteen",
+    "content": "Dormitory III canteen offers fast food, hot and cold beverages, and additional menu options."
+  },
+  {
+    "id": "moda_mutfacik",
+    "content": "MODA (Mutfacık), located in Dormitory I, offers ice cream, cookies, cakes, and hot and cold beverages."
+  },
+  {
+    "id": "tchibo_southern_cafe",
+    "content": "TCHIBO (Southern Cafe) offers a variety of hot and cold drinks, desserts, and snacks and is located in the building with Atatürk's bust."
   }
 ]
