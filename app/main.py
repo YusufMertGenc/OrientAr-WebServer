@@ -4,8 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from .schemas import ChatRequest, ChatResponse
 from .rag import rag_query, load_kb_to_chroma
 from .llm_client import generate_intent_response
-from app import rag
-
 
 
 app = FastAPI(title="OrientAR Chatbot API", version="0.4.1")
@@ -18,7 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ BURASI: STARTUP EVENT
 @app.on_event("startup")
 def startup_event():
     load_kb_to_chroma()
@@ -52,4 +49,3 @@ def chatbot_query(req: ChatRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
