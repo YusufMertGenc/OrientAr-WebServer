@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import ChatRequest, ChatResponse
-from .rag import rag_query_with_scores, load_kb_to_chroma
+from .rag import rag_query, load_kb_to_chroma
 from .llm_client import generate_intent_response
+from app import rag
 
 
 app = FastAPI(title="OrientAR Chatbot API", version="0.4.1")
@@ -30,9 +31,16 @@ def health_check():
 @app.post("/chatbot/query", response_model=ChatResponse)
 def chatbot_query(req: ChatRequest):
     try:
-        rag = rag_query_with_scores(req.question, top_k=5)
-        documents = rag["documents"]
+        rag = rag_query(req.question, top_k=5)
 
+        if rag["reason"] != "ok":
+            return ChatResponse(
+                message="I’m not sure based on the available information.",
+                confidence=0.2,
+                context_used=[]
+    )
+
+        documents = rag["documents"]
         llm_json = generate_intent_response(req.question, documents)
 
         return ChatResponse(
