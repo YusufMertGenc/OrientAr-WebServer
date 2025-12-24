@@ -72,6 +72,7 @@ def load_kb_to_chroma():
 
 
 def rag_query(question: str, top_k: int = 5, max_distance: float = 1.0) -> Dict:
+    
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
