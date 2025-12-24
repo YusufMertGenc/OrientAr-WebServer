@@ -7,6 +7,7 @@ from .llm_client import generate_intent_response
 from app import rag
 
 
+
 app = FastAPI(title="OrientAR Chatbot API", version="0.4.1")
 
 app.add_middleware(
@@ -31,16 +32,16 @@ def health_check():
 @app.post("/chatbot/query", response_model=ChatResponse)
 def chatbot_query(req: ChatRequest):
     try:
-        rag = rag_query(req.question, top_k=5)
+        rag_result = rag_query(req.question, top_k=5)
 
-        if rag["reason"] != "ok":
+        if rag_result["reason"] != "ok":
             return ChatResponse(
                 message="I’m not sure based on the available information.",
                 confidence=0.2,
                 context_used=[]
-    )
+            )
 
-        documents = rag["documents"]
+        documents = rag_result["documents"]
         llm_json = generate_intent_response(req.question, documents)
 
         return ChatResponse(
@@ -51,3 +52,4 @@ def chatbot_query(req: ChatRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
