@@ -71,7 +71,7 @@ def load_kb_to_chroma():
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
 
-def rag_query(question: str, top_k: int = 5, max_distance: float = 0.70) -> Dict:
+def rag_query(question: str, top_k: int = 5, max_distance: float = 1.0) -> Dict:
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
