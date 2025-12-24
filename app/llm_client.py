@@ -7,7 +7,7 @@ from .config import settings
 
 INTENT_SYSTEM_PROMPT = """
 You are OrientAR, an assistant for a campus application.
-
+Assume all questions are about METU NCC unless stated otherwise.
 Your task:
 - Answer the user's question using the provided context.
 - Respond ONLY with valid JSON.
