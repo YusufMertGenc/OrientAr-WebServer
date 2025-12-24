@@ -71,38 +71,18 @@ def load_kb_to_chroma():
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
 
-def rag_query(question: str, top_k: int = 5, max_distance: float = 1.0) -> Dict:
-    
+def rag_query(question: str, top_k: int = 5) -> Dict:
     query_embedding = ollama_embed([question])[0]
 
     results = _collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
-        include=["documents", "distances"]
+        include=["documents"]
     )
 
     docs = results["documents"][0] if results.get("documents") else []
-    dists = results["distances"][0] if results.get("distances") else []
-
-    if not docs:
-        return {
-            "documents": [],
-            "reason": "no_retrieval"
-        }
-
-    # 🔥 Distance filter (asıl RAG farkı)
-    filtered_docs = [
-        doc for doc, dist in zip(docs, dists)
-        if dist <= max_distance
-    ]
-
-    if not filtered_docs:
-        return {
-            "documents": [],
-            "reason": "low_relevance"
-        }
 
     return {
-        "documents": filtered_docs,
-        "reason": "ok"
+        "documents": docs
     }
+

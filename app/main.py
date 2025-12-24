@@ -30,15 +30,16 @@ def health_check():
 def chatbot_query(req: ChatRequest):
     try:
         rag_result = rag_query(req.question, top_k=5)
+        documents = rag_result["documents"]
 
-        if rag_result["reason"] != "ok":
+        # 🔥 KARAR BURADA
+        if not documents:
             return ChatResponse(
                 message="I’m not sure based on the available information.",
                 confidence=0.2,
                 context_used=[]
             )
 
-        documents = rag_result["documents"]
         llm_json = generate_intent_response(req.question, documents)
 
         return ChatResponse(
