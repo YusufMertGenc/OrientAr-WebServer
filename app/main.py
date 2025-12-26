@@ -6,7 +6,7 @@ from .rag import rag_query, load_kb_to_chroma
 from .llm_client import generate_intent_response
 
 
-app = FastAPI(title="OrientAR Chatbot API", version="0.4.1")
+app = FastAPI(title="OrientAR Chatbot API", version="0.5.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,6 +15,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.on_event("startup")
 def startup_event():
@@ -32,7 +33,6 @@ def chatbot_query(req: ChatRequest):
         rag_result = rag_query(req.question, top_k=5)
         documents = rag_result["documents"]
 
-        # 🔥 KARAR BURADA
         if not documents:
             return ChatResponse(
                 message="I’m not sure based on the available information.",
@@ -43,8 +43,8 @@ def chatbot_query(req: ChatRequest):
         llm_json = generate_intent_response(req.question, documents)
 
         return ChatResponse(
-            message=llm_json["message"],
-            confidence=llm_json["confidence"],
+            message=llm_json.get("message", ""),
+            confidence=llm_json.get("confidence", 0.5),
             context_used=documents
         )
 
