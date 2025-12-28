@@ -75,7 +75,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         "temperature": 0.2,
         "options": {
             "num_ctx": 2048,
-            "num_predict": 256
+            "num_predict": 128
         },
         "stream": False
     }
@@ -83,7 +83,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     resp = requests.post(
         f"{settings.llm_base_url}/api/chat",
         json=payload,
-        timeout=60
+        timeout=120
     )
     resp.raise_for_status()
 
