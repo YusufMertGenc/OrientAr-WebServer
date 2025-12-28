@@ -1,24 +1,236 @@
 [
   {
     "id": "metu_ncc_overview",
-    "content": "Middle East Technical University Northern Cyprus Campus (METU NCC) is the first overseas campus of a Turkish university. It was founded following an invitation by the governments of the Republic of Türkiye and the Turkish Republic of Northern Cyprus, with the foundation law adopted in 2003."
+    "content": "Middle East Technical University Northern Cyprus Campus (METU NCC) is the first overseas campus of a Turkish university. It was founded following an invitation by the governments of the Republic of Türkiye and the Turkish Republic of Northern Cyprus in 2000, with the foundation law adopted in 2003."
   },
   {
     "id": "metu_ncc_location",
-    "content": "METU Northern Cyprus Campus is located in the Güzelyurt district of North Cyprus."
+    "content": "METU NCC is located in the Güzelyurt district of Northern Cyprus."
   },
   {
     "id": "metu_ncc_programs",
-    "content": "METU NCC offers 15 undergraduate and 5 graduate programs, providing the same academic quality and standards as the main campus in Ankara, Türkiye."
+    "content": "METU NCC currently offers 15 undergraduate and 5 graduate programs, providing academic quality and standards maintained at the home campus in Ankara, Türkiye."
+  },
+  {
+    "id": "metu_ncc_students_count",
+    "content": "Approximately 3,150 students currently study at METU Northern Cyprus Campus."
+  },
+  {
+    "id": "metu_ncc_graduates_count",
+    "content": "More than 1,600 students have graduated from METU Northern Cyprus Campus."
+  },
+  {
+    "id": "metu_ncc_diploma_info",
+    "content": "METU NCC graduates receive METU diplomas undersigned by the METU Rector together with home campus graduates at the METU Graduation Ceremony in Ankara, Türkiye, and become part of the METU alumni network."
+  },
+
+  {
+    "id": "metu_ncc_general_contact_phone",
+    "content": "METU NCC general telephone number: +90 392 661 2000."
+  },
+  {
+    "id": "metu_ncc_general_contact_fax",
+    "content": "METU NCC fax number: +90 392 661 2009."
+  },
+  {
+    "id": "metu_ncc_general_info_email",
+    "content": "METU NCC general information e-mail: ncc@metu.edu.tr."
+  },
+  {
+    "id": "metu_ncc_student_info_email",
+    "content": "METU NCC student information e-mail: nccreg@metu.edu.tr."
+  },
+  {
+    "id": "metu_ncc_whatsapp_contact",
+    "content": "METU NCC WhatsApp contact (message only): +90 539 117 36 67."
+  },
+
+  {
+    "id": "registrars_office_email",
+    "content": "Registrar’s Office e-mail: nccreg@metu.edu.tr."
+  },
+  {
+    "id": "registrars_office_phone",
+    "content": "Registrar’s Office telephone: +90 392 661 2000."
+  },
+  {
+    "id": "dormitory_email",
+    "content": "Dormitory e-mail: nccdorms@metu.edu.tr."
+  },
+  {
+    "id": "dormitory_phone",
+    "content": "Dormitory telephone: +90 392 661 2600."
+  },
+  {
+    "id": "visa_support_contact_email",
+    "content": "Visa and COVID info contact e-mail: linda@metu.edu.tr."
+  },
+  {
+    "id": "visa_office_phone",
+    "content": "Visa Office telephone: +90 392 661 2105."
+  },
+  {
+    "id": "orientation_leadership_project_email",
+    "content": "Orientation Leadership Project Team e-mail: nccolp@metu.edu.tr."
+  },
+
+  {
+    "id": "campus_market_macro",
+    "content": "Macro Market on campus sells basic food, cleaning, and consumer products and is managed by Macro Ltd. Telephone: +90 392 661 1980-83."
+  },
+  {
+    "id": "campus_turkcell_office",
+    "content": "Kuzey Kıbrıs Turkcell (Çınar Telekom) office provides GSM services, photocopying, printing, and basic stationery items. Telephone: +90 392 661 1967."
+  },
+  {
+    "id": "campus_bookstore",
+    "content": "The campus bookstore (Deniz Kırtasiye) sells textbooks recommended by academic units and stationery items, and provides photocopying and printing services. Telephone: +90 392 661 2249."
+  },
+  {
+    "id": "campus_barber",
+    "content": "Campus barber telephone: +90 392 661 1963."
+  },
+  {
+    "id": "campus_hairdresser",
+    "content": "Campus hairdresser telephone: +90 392 661 1964."
+  },
+  {
+    "id": "campus_bank",
+    "content": "The METU NCC branch of İşBank provides on-campus banking services on weekdays and has two ATM machines located in front of the bank. Telephone: +90 392 661 1951-55."
+  },
+  {
+    "id": "campus_post_office",
+    "content": "The on-campus post office, a branch of the TRNC Post Office, provides all postal services to the campus community. Telephone: +90 392 661 1977."
+  },
+
+  {
+    "id": "campus_food_dining_hall_a_la_carte",
+    "content": "The à la carte and table d'hôte dining hall offers fixed-price menus including main and side dishes, soup, salad or yoghurt, and fruit or dessert."
+  },
+  {
+    "id": "campus_food_main_cafeteria_kirlangic",
+    "content": "The main cafeteria operated by Kırlangıç Catering offers fast food, grill selections, breakfast menus, cookies, cakes, and hot and cold beverages."
+  },
+  {
+    "id": "campus_food_sfl_dorm_canteens",
+    "content": "Canteens located in the School of Foreign Languages (SFL) and Dormitory I and II buildings serve fast food and hot and cold beverages."
+  },
+  {
+    "id": "campus_food_dormitory_iii_canteen",
+    "content": "Dormitory III canteen offers fast food, hot and cold beverages, and additional menu options."
+  },
+  {
+    "id": "campus_food_moda_mutfacik",
+    "content": "MODA (Mutfacık), located in Dormitory I, offers ice cream, cookies, cakes, and hot and cold beverages."
+  },
+  {
+    "id": "campus_food_tchibo_southern_cafe",
+    "content": "TCHIBO (Southern Cafe) offers a variety of hot and cold drinks, desserts and snacks and is located in the building with Atatürk's bust."
+  },
+  {
+    "id": "administrative_affairs_phone",
+    "content": "For further information, call 0392 661 2126 (Directorate of Administrative Affairs)."
+  },
+
+  {
+    "id": "sports_facilities_overview",
+    "content": "METU NCC provides sports facilities including a Sports Center, outdoor climbing wall, tennis courts, astro turf football field, and an outdoor swimming pool."
+  },
+  {
+    "id": "sports_center_indoor_facilities",
+    "content": "Sports Center facilities include a Sports Hall for basketball, volleyball, handball, mini football and badminton exhibitions; plus squash, table tennis, aerobic/dance/zumba/boxing/yoga/pilates/exercise hall, running-walking track (160m), meeting room, locker rooms, referee rooms, first aid office, fitness hall and cardio/fitness/free weights/rowing/running machines."
+  },
+  {
+    "id": "sports_fields_outdoor_facilities",
+    "content": "Outdoor sport fields include basketball/volleyball courts, tennis courts, mini football field, outdoor swimming pool (25m x 12m), climbing wall (11m), beach volleyball, athletics running track (tartan surface, 200m, four lanes), outdoor fitness machines, and an 18-hole minigolf course."
+  },
+  {
+    "id": "sports_center_working_hours_weekdays_weekends",
+    "content": "Sports facilities working hours (weekdays and weekend): 06:00 – 23:00."
+  },
+  {
+    "id": "sports_center_working_hours_holiday_summer",
+    "content": "Sports facilities working hours (holiday and summer term): 07:00 – 20:00."
+  },
+
+  {
+    "id": "health_center_overview",
+    "content": "METU NCC Health Center (Medico) provides primary care and urgent care to the university community from the Health Complex, with preventive health care and counseling services."
+  },
+  {
+    "id": "health_center_staff_and_services",
+    "content": "Health Center staff includes a consultant, 1 nurse, and a clinical psychologist. The Health Center diagnoses health problems, prepares a prescription plan, and has observation rooms."
+  },
+  {
+    "id": "health_center_doctor_hours_weekdays",
+    "content": "Health Center doctor examinations are offered between 09:15 - 17:15 on weekdays."
+  },
+  {
+    "id": "health_center_contacts_polyclinic",
+    "content": "Health Center contact: 661-2183 (Polyclinic)."
+  },
+  {
+    "id": "health_center_contacts_doctor",
+    "content": "Health Center contact: 661-1923 (Doctor)."
+  },
+  {
+    "id": "health_center_after_hours_emergency",
+    "content": "When the Health Center is closed: call 1958 (METU NCC internal phone) or 112 (Emergency/Ambulance)."
+  },
+
+  {
+    "id": "library_about_mission",
+    "content": "The Library commits to support METU NCC course programs, meet the changing information needs of students, faculty and staff, and collaborate in resource sharing projects with national and international institutions."
+  },
+  {
+    "id": "library_facilities_area_capacity",
+    "content": "The library has an indoor area of 3,528 square meters, shelving capacity of 60,000 volumes, and total seating capacity for 450 people. It includes group study rooms and one silent study hall."
+  },
+  {
+    "id": "library_internet_access",
+    "content": "Library areas are supported with internet access."
+  },
+  {
+    "id": "library_hours_academic_term",
+    "content": "The library remains open 24 hours a day during the academic term."
+  },
+  {
+    "id": "library_working_hours_daily",
+    "content": "The Library is open daily from 08:30 to 23:30."
+  },
+
+  {
+    "id": "library_collection_size_books",
+    "content": "The library has a collection of 43,000 books."
+  },
+  {
+    "id": "library_e_resources_access",
+    "content": "Library users can access METU Ankara main library electronic resources via the internet, including electronic journals and e-books through online databases on campus."
+  },
+  {
+    "id": "library_classification_system",
+    "content": "The book collection is organized according to the Library of Congress Classification System; books are organized on shelves by this classification system, book number, and publishing date."
+  },
+  {
+    "id": "library_print_journals_newspapers_order",
+    "content": "Print journals and newspapers are arranged in alphabetical order."
+  },
+  {
+    "id": "library_collection_language",
+    "content": "The collection is predominantly in English, but also contains some materials in Turkish."
+  },
+  {
+    "id": "library_open_access_floors",
+    "content": "All printed materials are on open access on the ground and first floor."
   },
 
   {
     "id": "library_rules_general",
-    "content": "Food, beverages, and smoking are not allowed in the library. Users are responsible for their belongings, and the library is not responsible for theft or losses."
+    "content": "No food, beverages or smoking are allowed in the library. Users are responsible for their belongings; the library is not responsible for theft or losses."
   },
   {
     "id": "library_rules_mobile_phones",
-    "content": "Users are required to switch off their mobile phones while inside the library."
+    "content": "Users are required to switch their mobile phones off while inside the library."
   },
   {
     "id": "library_rules_security",
@@ -27,96 +239,478 @@
 
   {
     "id": "library_borrowing_id_requirement",
-    "content": "To borrow books from the library, users must present their current METU ID card at the circulation desk."
+    "content": "When borrowing books, you must show your current METU ID Card at the circulation desk. You will not be allowed to check out any items without it."
   },
   {
-    "id": "library_borrowing_limits_students",
-    "content": "METU NCC undergraduate students may borrow up to 15 books for 15 days, while graduate students may borrow up to 20 books for 30 days."
+    "id": "library_borrowing_prohibited_using_others_id",
+    "content": "It is prohibited to borrow books using another member's ID or library card."
   },
   {
-    "id": "library_borrowing_limits_staff",
-    "content": "METU NCC academic staff and PhD students may borrow up to 25 books for 30 days, while administrative staff may borrow up to 15 books for 30 days."
+    "id": "library_borrowing_limits_academic_staff",
+    "content": "METU NCC academic staff and PhD students may borrow up to 25 books at a time for 30 days."
+  },
+  {
+    "id": "library_borrowing_limits_administrative_staff",
+    "content": "METU NCC administrative staff may borrow up to 15 books at a time for 30 days."
+  },
+  {
+    "id": "library_borrowing_limits_undergraduate_students",
+    "content": "METU NCC undergraduate students may borrow up to 15 books at a time for 15 days."
+  },
+  {
+    "id": "library_borrowing_limits_graduate_students",
+    "content": "METU NCC graduate students may borrow up to 20 books at a time for 30 days."
   },
   {
     "id": "library_multimedia_borrowing",
-    "content": "Academic and administrative staff may borrow up to 3 multimedia items for 3 days, while students may borrow up to 2 multimedia items for 3 days."
+    "content": "METU NCC academic and administrative staff may borrow up to 3 multimedia items for 3 days, while METU NCC students may borrow up to 2 multimedia items for 3 days at a time."
   },
   {
     "id": "library_overdue_policy",
-    "content": "Members with overdue books cannot borrow new items until overdue materials are returned and fines are paid. Overdue books cannot be renewed."
+    "content": "Members with overdue books may not borrow new ones until they return overdue items and pay a fine. Overdue books may not be renewed."
   },
   {
     "id": "library_reference_materials",
-    "content": "Reference books and periodicals cannot be borrowed and must be used only inside the library."
+    "content": "Reference books and periodicals cannot be borrowed and must be used only inside the library; they cannot be taken beyond the security system."
   },
   {
     "id": "library_renewal_policy",
-    "content": "Academic staff and research assistants may renew borrowed items up to three times, while students may renew items up to two times unless the item is requested by another user."
+    "content": "Academic staff and research assistants may recheck items on loan three times and students twice, unless the material is requested by someone else."
+  },
+  {
+    "id": "library_recall_policy_director",
+    "content": "The director of the library may ask a user to return any book in case of necessity."
+  },
+  {
+    "id": "library_renewal_in_person_students",
+    "content": "Students can renew loan periods in person with their METU ID cards and books."
   },
   {
     "id": "library_short_loan_section",
-    "content": "Academic staff, administrative staff, and students can borrow materials from the Reserve (Short Loan Section) for periods ranging from 2 hours to one week, depending on the source."
+    "content": "Academic and administrative staff and students can borrow books from the Reserve (Short Loan Section) according to the type and loan period of the source (for 2 hours, 5 hours, one day, three days, or one week)."
   },
   {
     "id": "library_easy_readings",
-    "content": "Students can borrow up to 3 books for 7 days at a time from the Easy Readings Collection."
-  },
-  {
-    "id": "library_working_hours",
-    "content": "The Library is open daily from 08:30 to 23:30."
+    "content": "Students can borrow up to 3 books for 7 days from the Easy Readings Collection at a time."
   },
 
   {
-    "id": "campus_market_macro",
-    "content": "Macro Market on campus sells basic food, cleaning, and consumer products and is managed by Macro Ltd. The contact telephone number is +90 392 661 1980-83."
+    "id": "library_reserve_policy_reserve_books",
+    "content": "Books already on loan can be reserved."
   },
   {
-    "id": "campus_turkcell_office",
-    "content": "The Kuzey Kıbrıs Turkcell (Çınar Telekom) office provides GSM services, photocopying, printing, and stationery items for the campus community. The contact telephone number is +90 392 661 1967."
+    "id": "library_reserve_policy_request_button",
+    "content": "To borrow a book checked out by another user, you can click the \"Request\" button and follow the prompts to request it."
   },
   {
-    "id": "campus_bookstore",
-    "content": "The campus bookstore (Deniz Kırtasiye) sells textbooks recommended by academic units, stationery items, and provides photocopying and printing services. The contact telephone number is +90 392 661 2249."
+    "id": "library_reserve_policy_on_hold_duration",
+    "content": "When a requested book returns, it becomes \"on hold\" and is kept for you up to 3 days at the hold shelf in the Circulation Desk."
   },
   {
-    "id": "campus_barber",
-    "content": "The campus barber provides hair cutting services. The contact telephone number is +90 392 661 1963."
+    "id": "library_reserve_policy_cancellation",
+    "content": "If reserved books are not claimed within three days, their reservation is canceled."
   },
   {
-    "id": "campus_hairdresser",
-    "content": "The campus hairdresser provides hair styling services. The contact telephone number is +90 392 661 1964."
-  },
-  {
-    "id": "campus_bank",
-    "content": "The METU NCC branch of İşBank provides on-campus banking services on weekdays and has two ATM machines located in front of the bank. The contact telephone number is +90 392 661 1951-55."
-  },
-  {
-    "id": "campus_post_office",
-    "content": "The on-campus post office, a branch of the TRNC Post Office, provides all postal services to the campus community. The contact telephone number is +90 392 661 1977."
+    "id": "library_reserve_policy_max_reservations",
+    "content": "Members may not reserve more than three books."
   },
 
   {
-    "id": "dining_hall_a_la_carte",
-    "content": "The à la carte and table d'hôte dining hall offers fixed-price menus including main and side dishes, soup, salad or yoghurt, and fruit or dessert."
+    "id": "library_fines_long_loan_overdue",
+    "content": "Late return of a long loan material incurs a fine of 5 TL per day."
   },
   {
-    "id": "main_cafeteria_kirlangic",
-    "content": "The main cafeteria operated by Kırlangıç Catering offers fast food, grill selections, breakfast menus, cookies, cakes, and hot and cold beverages."
+    "id": "library_fines_short_loan_overdue",
+    "content": "Short-Loan (Reserve Collection) overdue incurs a fine of 5 TL per hour (120 TL per day)."
   },
   {
-    "id": "sfl_dormitory_canteens",
-    "content": "Canteens located in the School of Foreign Languages (SFL) and Dormitory I and II buildings serve fast food and hot and cold beverages."
+    "id": "library_fines_multimedia_overdue",
+    "content": "Delay of multimedia resources incurs a fine of 5 TL per day for every multimedia item."
   },
   {
-    "id": "dormitory_iii_canteen",
-    "content": "Dormitory III canteen offers fast food, hot and cold beverages, and additional menu options."
+    "id": "library_overdue_notifications_and_legal",
+    "content": "If material is not returned within one month after notifications, it is assumed lost and referred to the President of the University to start legal procedures."
+  },
+
+  {
+    "id": "library_leaving_university_staff_clearance",
+    "content": "Academic and administrative staff leaving the university cannot complete retirement or resignation procedures before returning borrowed materials and obtaining a clearance document from the library to present to the Personnel Office."
   },
   {
-    "id": "moda_mutfacik",
-    "content": "MODA (Mutfacık), located in Dormitory I, offers ice cream, cookies, cakes, and hot and cold beverages."
+    "id": "library_leaving_university_students_legal",
+    "content": "Students who leave the university without returning books are referred to the President's Office for legal procedures."
   },
   {
-    "id": "tchibo_southern_cafe",
-    "content": "TCHIBO (Southern Cafe) offers a variety of hot and cold drinks, desserts, and snacks and is located in the building with Atatürk's bust."
+    "id": "library_debt_blocks_documents",
+    "content": "Students with debts to the library may not renew admission or obtain diplomas or related documents."
+  },
+
+  {
+    "id": "library_membership_eligibility",
+    "content": "Current academic and administrative staff and all registered students become natural library members after receiving the identity card given by the University."
+  },
+  {
+    "id": "library_membership_update_info",
+    "content": "Members must inform the library if they lose METU ID cards or if ID information changes."
+  },
+  {
+    "id": "library_membership_agreement_rules",
+    "content": "Members agree to obey library rules."
+  },
+  {
+    "id": "library_users_outside_university",
+    "content": "Users outside the university may use library resources but cannot become members of the library."
+  },
+
+  {
+    "id": "dormitories_overview_accessibility",
+    "content": "METU NCC dormitories are furnished with modern technology and offer a safe, comfortable environment. There are pathways for wheelchairs, and Dormitory I is convenient for accommodation of physically disabled students."
+  },
+  {
+    "id": "dormitories_options_general",
+    "content": "The campus provides various options for accommodation, including Dormitory I, Dormitory II, Dormitory III, and METU Development Foundation Private EBİ Student Dormitory."
+  },
+  {
+    "id": "dormitory_i_rooms",
+    "content": "Dormitory I offers suit rooms (single occupancy, shared bathroom and kitchen with one other student) and rooms shared by two or four students with a common study area and bathroom. Rooms have AC, central heating, broadband internet, and internal telephones. Facilities include lobby, TV room, canteen, laundry and ironing room, common kitchens and study rooms; one block is for females."
+  },
+  {
+    "id": "dormitory_ii_rooms",
+    "content": "Dormitory II is designed to accommodate three students in a suite with individual bedrooms, a common study area, kitchen, and bathroom. The building has two separate blocks, one for males and one for females, with facilities similar to Dormitory I."
+  },
+  {
+    "id": "dormitory_iii_rooms",
+    "content": "Dormitory III rooms accommodate two or four students (2 double bedrooms). WCs, bathrooms, and kitchens are for common usage (approximately 26-32 persons). Study rooms are available on each floor, with facilities similar to Dormitory I and II."
+  },
+  {
+    "id": "ebi_student_dormitory_overview",
+    "content": "METU Development Foundation Private EBİ Student Dormitory offers rooms for 2 or 4 people; the building has two separate blocks designated for boys and girls. Toilet, bathroom, kitchen, and study area are located in each room and shared by 4 people."
+  },
+  {
+    "id": "ebi_student_dormitory_link",
+    "content": "For EBİ Student Dormitory details: https://ncc.metu.edu.tr/accommodation/ebi-student-dormitory"
+  },
+
+  {
+    "id": "dormitory_admin_dorm1_manager",
+    "content": "Dormitory I manager: Hakan GÖKMEN. E-mail: hgokmen@metu.edu.tr. Phone: +90 392 661 2410. Fax: +90 392 661 2490."
+  },
+  {
+    "id": "dormitory_admin_dorm2_manager",
+    "content": "Dormitory II manager: Meltem ŞENERGİN. E-mail: senergin@metu.edu.tr. Phone: +90 392 661 2600. Fax: +90 392 661 2609."
+  },
+  {
+    "id": "dormitory_admin_dorm3_manager",
+    "content": "Dormitory III manager: Atilla DEMİREL. E-mail: datilla@metu.edu.tr. Phone: +90 392 661 3333. Fax: +90 392 661 3339."
+  },
+
+  {
+    "id": "travel_to_north_cyprus_flights_note",
+    "content": "There are daily direct flights from Ankara and Istanbul and scheduled direct flights from several Turkish cities to Lefkoşa Ercan Airport. Flights to Northern Cyprus are only scheduled from Türkiye by Turkish airline companies."
+  },
+  {
+    "id": "travel_to_north_cyprus_kibhas_info",
+    "content": "You may use KIBHAS Airport Services shuttles for transfers from/to Ercan Airport. Check KIBHAS website for operation hours and communication information."
+  },
+  {
+    "id": "travel_to_north_cyprus_sea_info",
+    "content": "Ferry and sea bus services travel daily between Mersin-Taşucu (Türkiye) and Kyrenia and Famagusta (TRNC) harbors. In summer, there is also a service between Alanya and Kyrenia."
+  },
+  {
+    "id": "travel_on_island_general",
+    "content": "There are regular bus services between Güzelyurt, Nicosia and Kyrenia, and between Nicosia and Famagusta. Taxi services are available for local and inter-city transportation."
+  },
+  {
+    "id": "traffic_rules_left_side",
+    "content": "In Northern Cyprus, visitors must drive on the left. Turkish Republic of Northern Cyprus traffic rules apply on campus and traffic runs on the left."
+  },
+  {
+    "id": "campus_gates_distance",
+    "content": "METU NCC entrance gates A1 and A2 are 6 km from the Güzelyurt city center (A1) and 1 km from the village of Kalkanlı (A2)."
+  },
+  {
+    "id": "campus_local_transportation_minibus_taxi",
+    "content": "Scheduled minibus services are available to travel locally from and to METU NCC. Shared taxis provide on-call pick-up service."
+  },
+  {
+    "id": "campus_parking_and_speed_rules",
+    "content": "Speed limits and no-parking areas apply within the campus premises."
+  },
+
+  {
+    "id": "bus_route_guzelyurt_lefkosa_cimen_phone",
+    "content": "Bus route Güzelyurt–Lefkoşa (Çimen): +90 392 714 6111."
+  },
+  {
+    "id": "bus_route_lefkosa_guzelyurt_cimen_phone",
+    "content": "Bus route Lefkoşa–Güzelyurt (Çimen): +90 392 228 8615."
+  },
+  {
+    "id": "bus_route_guzelyurt_girne_akva_phone",
+    "content": "Bus route Güzelyurt–Girne (Akva): +90 392 815 1010."
+  },
+  {
+    "id": "bus_route_guzelyurt_lefkosa_akva_phone",
+    "content": "Bus route Güzelyurt–Lefkoşa (Akva): +90 392 714 4970."
+  },
+  {
+    "id": "bus_route_guzelyurt_lefke_akva_phone",
+    "content": "Bus route Güzelyurt–Lefke (Akva): +90 392 728 8326."
+  },
+  {
+    "id": "bus_route_guzelyurt_kalkanli_metu_ncc_akva_phone",
+    "content": "Bus route Güzelyurt–Kalkanlı–METU NCC (Akva): +90 548 863 74 11."
+  },
+  {
+    "id": "bus_route_lefkosa_girne_kombos_phone",
+    "content": "Bus route Lefkoşa–Girne (Kombos): +90 392 227 2929."
+  },
+  {
+    "id": "bus_route_girne_lefkosa_kombos_phone",
+    "content": "Bus route Girne–Lefkoşa (Kombos): +90 392 815 2317."
+  },
+  {
+    "id": "bus_route_guzelyurt_girne_cimen_phone",
+    "content": "Bus route Güzelyurt–Girne (Çimen): +90 392 714 6111."
+  },
+  {
+    "id": "bus_route_girne_guzelyurt_cimen_phone",
+    "content": "Bus route Girne–Güzelyurt (Çimen): +90 392 815 3144."
+  },
+  {
+    "id": "bus_route_lefkosa_gazimagusa_itimat_phone",
+    "content": "Bus route Lefkoşa–Gazimağusa (İtimat): +90 392 227 2743."
+  },
+  {
+    "id": "bus_route_gazimagusa_lefkosa_itimat_phone",
+    "content": "Bus route Gazimağusa–Lefkoşa (İtimat): +90 392 366 6666."
+  },
+
+  {
+    "id": "students_clubs_and_societies_list",
+    "content": "Examples of METU NCC student clubs and societies include: International Student Association, Music Club, Fantastic Fiction Society, Ataturk's Thought Club, Dance Society, Chess Society, Sub-Aqua Society, Climbing Society, Radio Society, Society of Guidance and Psychological Counseling, Community Volunteers Club, Socialist Thought Club, Cinema Club, Psychology Club, Mockup Club, Model United Nations Society, Turkish Classical Music Society, Civil and Construction Society, Economics Club, Aviation and Aerospace Society, Fine Arts Club, Theater Club, IEEE Student Society, Photography Club, Energy Society, International Relations Society."
+  },
+
+  {
+    "id": "registration_guide_steps_to_reach_and_settle",
+    "content": "The Registration Guide includes steps to reach and settle down at METU NCC, including travel to Northern Cyprus, dormitories, registration, residence permit, exams, orientation, and course registration steps."
+  },
+  {
+    "id": "travel_to_trnc_transit_visa_note",
+    "content": "All flights to Northern Cyprus are connecting flights via Turkey; depending on nationality, a Turkish transit visa may be required. Support officer: Ms. Linda Bahar Sabah (linda@metu.edu.tr)."
+  },
+  {
+    "id": "travel_airport_to_campus_kibhas_price",
+    "content": "Transport from Ercan Airport to campus is provided by KIBHAS bus service; ticket price is approximately 8.5 USD (350 TL)."
+  },
+  {
+    "id": "travel_airport_to_campus_taxi_cost",
+    "content": "Taxis are an alternative and cost around $60 from the airport."
+  },
+  {
+    "id": "travel_time_to_campus_from_airport",
+    "content": "It takes about 1 to 1.5 hours to reach the campus from Ercan Airport or the Port of Kyrenia, and about 2 hours from the Port of Famagusta."
+  },
+  {
+    "id": "arrival_form_link",
+    "content": "New students should fill out the arrival form at https://oryantasyon.ncc.metu.edu.tr/karsilama/ once flight information is available."
+  },
+  {
+    "id": "upon_arrival_dorm_allocation",
+    "content": "Upon arrival at campus, new students are allocated a room in METU NCC dormitories. Freshmen are strongly recommended to stay on campus during their first year for convenience."
+  },
+  {
+    "id": "dorm_registration_documents_photos",
+    "content": "Documents needed for dormitory registration include two headshot photos."
+  },
+
+  {
+    "id": "registration_location_registrars_office",
+    "content": "Registration is done at the Registrar’s Office located in the Administration Building of the Campus."
+  },
+  {
+    "id": "registration_date_time_window",
+    "content": "You must come to the Registrar’s Office on September 15, 2025, between 08:30-12:15 and 13:30-17:00."
+  },
+  {
+    "id": "registration_documents_required_list",
+    "content": "Registration documents include: original high school diploma and transcript attested by the Turkish Embassy; original exam result documents; TOEFL-IBT/PTE Academic reports (if available); Equivalence Letter; photocopies of passport pages containing identification information; and two headshot photos (4.5cm x 6cm) taken within the last 6 months."
+  },
+  {
+    "id": "registration_documents_trnc_entry_note",
+    "content": "To enter TRNC, students must present the original high school diploma and relevant documents (such as Acceptance Letter)."
+  },
+  {
+    "id": "registration_incomplete_documents_deadline",
+    "content": "If registration documents are incomplete, missing ones must be provided by the deadline (September 15, 2025)."
+  },
+  {
+    "id": "course_exemption_petition_link",
+    "content": "Students who want exemption from certain courses may submit a petition after activating the user account via: https://intranet.ncc.metu.edu.tr/oim_dilekce.php (English proficiency requirements apply)."
+  },
+
+  {
+    "id": "metu_email_activation_link",
+    "content": "Activate university e-mail address at https://useraccount.metu.edu.tr/newstudent/index.php?lang=EN."
+  },
+  {
+    "id": "metu_mail_access_link",
+    "content": "Access METU email at https://metumail.metu.edu.tr/."
+  },
+  {
+    "id": "student_id_card_application_link",
+    "content": "Apply for METU NCC student identity card at http://cardinfo.metu.edu.tr/ after activating the user account."
+  },
+  {
+    "id": "metu_email_mobile_setup_info",
+    "content": "Instructions for adding METU email to mobile devices can be found at http://faq.cc.metu.edu.tr/groups/e-mail-programs."
+  },
+
+  {
+    "id": "health_insurance_requirement_note",
+    "content": "It is obligatory to enroll in the Health Insurance System of TRNC for cases that cannot be handled at the Campus Medical Center; students should purchase it by paying the necessary fee before registration."
+  },
+  {
+    "id": "residence_permit_requirement",
+    "content": "After arriving in TRNC, students must acquire a Student Residence Permit within one month; it is mandatory by law."
+  },
+  {
+    "id": "residence_permit_application_site",
+    "content": "Residence permit applications are done at https://permissions.gov.ct.tr after completing campus registration."
+  },
+  {
+    "id": "student_satisfaction_office_contact",
+    "content": "For questions about residence permit procedure, contact Student Satisfaction Office: nccsso@metu.edu.tr."
+  },
+  {
+    "id": "residence_permit_deportation_warning",
+    "content": "Failure to acquire a student residence permit could eventually lead to deportation from the island."
+  },
+
+  {
+    "id": "english_proficiency_exam_requirement",
+    "content": "The medium of instruction at METU NCC is English. Students must take the English Proficiency Exam if they are not nationals of English-speaking countries and do not have valid TOEFL-IBT or PTE Academic scores and have not graduated from English-medium secondary education in English-speaking countries."
+  },
+  {
+    "id": "english_proficiency_exam_date_location",
+    "content": "English Proficiency Exam (face-to-face): September 16, 2025, 10:00 (TRNC local time). The P building serves as the testing location; identification and a pencil/eraser are required; students should be in the exam room by 09:30."
+  },
+  {
+    "id": "english_proficiency_exam_results_site_date",
+    "content": "English Proficiency Exam results are accessible by 09:00 on September 23, 2025 at https://student.metu.edu.tr."
+  },
+  {
+    "id": "english_proficiency_exam_objection_steps",
+    "content": "Students can object to English Proficiency Exam scores within 3 working days after announcement by submitting the EPE reassessment form via METU NCC intranet (REQUESTS -> STUDENT FORMS) or by submitting a petition to the SFL department secretary if they cannot log in."
+  },
+  {
+    "id": "english_placement_exam_date",
+    "content": "English Placement Exam (face-to-face): September 26, 2025, 10:00 (TRNC local time). Students who fail the English Proficiency Exam should take the placement exam; Test 1 must be passed to take Test 2."
+  },
+  {
+    "id": "english_proficiency_passing_score",
+    "content": "English Proficiency Exam passing score is 59.5 out of 100 (69.5 for Teaching English as a Foreign Language program)."
+  },
+  {
+    "id": "english_exemption_scores_toefl_pte",
+    "content": "Minimum scores to be exempt from the English Language Preparatory Program: TOEFL-IBT 75 and PTE Academic 65 (taken after 12.11.2024). Scores are valid for two years."
+  },
+  {
+    "id": "english_exam_sample_questions_link",
+    "content": "English exam sample questions and details: https://ncc.metu.edu.tr/sfl/general-information-about-epe."
+  },
+
+  {
+    "id": "mat100_course_purpose",
+    "content": "MAT 100 Pre-Calculus provides a mathematical background for Calculus and related courses for students who meet English requirements; it covers functions and core algebra/trigonometry skills."
+  },
+  {
+    "id": "mat100_proficiency_exam_exemption",
+    "content": "Students who score at least 50 on the Mathematics Proficiency Exam are exempted from MAT 100 and enroll directly in MAT 119."
+  },
+  {
+    "id": "mat100_proficiency_exam_date",
+    "content": "MAT 100 Proficiency Exam: September 22, 2025, 10:00 (TRNC local time)."
+  },
+
+  {
+    "id": "cng100_exemption_exam_overview",
+    "content": "To be exempt from CNG 100, students must pass the CNG 100 Exemption Exam; successful students receive EX on transcript; minimum grade is determined by academic authorities."
+  },
+  {
+    "id": "cng100_exemption_exam_eligibility",
+    "content": "Students who have passed English Preparatory Program requirements can take the CNG 100 Exemption Exam; current English Preparatory Program students cannot take it."
+  },
+  {
+    "id": "cng100_exemption_exam_registration_process",
+    "content": "To register for the CNG 100 exemption exam, students should follow METU e-mails; the Registrar's Office will announce the examination after registration."
+  },
+  {
+    "id": "cng100_exemption_exam_date",
+    "content": "CNG 100 Exemption Examination: September 28, 2025, 09:00 (TRNC local time). The exam will be online; details will be sent via email."
+  },
+  {
+    "id": "cng100_course_registration_note",
+    "content": "To register for CNG 100 course, students should interactively register by choosing the eligible section."
+  },
+
+  {
+    "id": "orientation_program_overview",
+    "content": "The orientation program helps newcomers adapt to campus life through informative live colloquies, videos by staff, and face-to-face social activities. Details are announced at http://ncc.metu.edu.tr/new-students."
+  },
+  {
+    "id": "orientation_program_dates",
+    "content": "Orientation Program dates: September 23-28, 2025."
+  },
+
+  {
+    "id": "course_registration_freshman_auto_added",
+    "content": "For first-year, first-semester undergraduate students, courses will be automatically added to registration, but academic advisor approval is required to complete course registration."
+  },
+  {
+    "id": "course_registration_interactive_dates",
+    "content": "Undergraduate students should complete interactive course registration between September 24-26, 2025."
+  },
+  {
+    "id": "course_registration_advisor_approval_required",
+    "content": "Students will not complete course registration without receiving their advisor's approval."
+  },
+  {
+    "id": "sais_advisor_details_link",
+    "content": "Advisor details can be viewed on SAIS (https://oibs.metu.edu.tr/) Program 61 during September 24-26, 2025 (Semester: 20251)."
+  },
+  {
+    "id": "course_details_timetables_link",
+    "content": "Course details and timetables can be checked at https://cet.ncc.metu.edu.tr/."
+  },
+  {
+    "id": "classes_start_date",
+    "content": "Classes of English Preparatory Program commence: September 29, 2025. Classes of Undergraduate Programs commence: September 29, 2025."
+  },
+  {
+    "id": "add_drop_dates",
+    "content": "Course add and drop period: October 6-10, 2025."
+  },
+  {
+    "id": "discount_applications_deadline",
+    "content": "Deadline for discount applications (children of METU graduates/staff and siblings): October 10, 2025. Fee info link: https://ncc.metu.edu.tr/ro/fees."
+  },
+
+  {
+    "id": "code_of_ethics_summary",
+    "content": "METU NCC Code of Ethics expects students to do all work on their own, not cheat or help others to do so, and not deceive academic staff."
+  },
+  {
+    "id": "attendance_requirement",
+    "content": "Students must attend lectures, office hours, and examinations; instructors follow attendance records closely."
+  },
+  {
+    "id": "disciplinary_rules_link",
+    "content": "Academic rules and disciplinary procedures: https://ncc.metu.edu.tr/ro/rules-and-regulations."
+  },
+
+  {
+    "id": "important_dates_summary",
+    "content": "Important dates include: EPE Sep 16, 2025 10:00; Placement Exam Sep 26, 2025 10:00; MAT Proficiency Sep 22, 2025 10:00; CNG 100 Exemption Sep 28, 2025 09:00; course registration with advisor approval Sep 24-26, 2025; add-drop Oct 6-10, 2025."
   }
 ]
