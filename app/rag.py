@@ -105,7 +105,7 @@ def id_to_topic_text(doc_id: str) -> str:
 
 
 # ---------------- Topic routing ----------------
-def top_topics(question: str, top_n: int = 5) -> List[str]:
+def top_topics(question: str, top_n: int = 7) -> List[str]:
     if not _TOPIC_IDS or not _TOPIC_EMBS:
         return []
 
