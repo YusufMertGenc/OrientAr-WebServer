@@ -147,6 +147,14 @@ def rerank_documents(
 def load_kb_to_chroma():
     global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS
 
+    try:
+        if _collection.count() > 0:
+            print("Chroma already populated, skipping embedding.")
+            return
+    except Exception:
+        pass
+
+
     if not _data_path.exists():
         raise FileNotFoundError("campus_kb.json not found")
 
