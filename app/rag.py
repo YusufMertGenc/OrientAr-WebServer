@@ -1,5 +1,22 @@
 # rag.py  ✅ KB-driven (ID-as-topic) RAG + topic routing + rerank (no keyword lists)
 
+"""
+RAG Module (KB-driven)
+
+Implements a Retrieval-Augmented Generation pipeline that learns topics
+directly from the Knowledge Base (KB) using document IDs as topics.
+
+Flow:
+- load_kb_to_chroma(): loads KB, builds topic and document embeddings (startup only)
+- ollama_embed(): central embedding function with in-memory caching
+- top_topics(): routes a question to the most relevant KB topics
+- rerank_documents(): selects the most answer-relevant documents
+- rag_query(): end-to-end RAG pipeline used by the API
+
+No hard-coded keywords or entities are used.
+"""
+
+
 import json
 import hashlib
 import math
@@ -40,8 +57,8 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
     embeddings: List[List[float]] = []
 
     for text in texts:
-        key = _hash_text(text)
-        if key in _EMBED_CACHE:
+        key = _hash_text(text) #Text hashing for caching
+        if key in _EMBED_CACHE:#If already cached, use it
             embeddings.append(_EMBED_CACHE[key])
             continue
 

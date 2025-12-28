@@ -1,3 +1,15 @@
+"""
+LLM Client
+
+Responsible for generating the final answer using the selected RAG context.
+Builds a constrained prompt, sends it to the LLM, and parses a JSON-only response.
+
+Key points:
+- Uses a strict system prompt to avoid hallucination
+- Limits context size for performance
+- Expects a structured JSON output (message + confidence)
+"""
+
 import json
 import requests
 from typing import List
@@ -9,9 +21,17 @@ INTENT_SYSTEM_PROMPT = """
 You are OrientAR, an assistant for a campus application.
 Assume all questions are about METU NCC unless stated otherwise.
 
+You may combine and reason over multiple pieces of the provided context
+to produce a clear and helpful answer.
+You MUST NOT use any knowledge that is not present in the context.
+
+If the question is related to "How to" or "Help me",
+provide step-by-step instructions ONLY if the steps are supported by the context.
+
 Rules:
 - Use ONLY the provided context.
-- If the answer is not in the context, say you do not know.
+- If the answer cannot be derived from the context, say you do not know.
+- Do NOT make assumptions or add external information.
 - Respond ONLY with valid JSON.
 
 JSON FORMAT:
@@ -19,6 +39,7 @@ JSON FORMAT:
   "message": "<answer>",
   "confidence": <number between 0 and 1>
 }
+
 """
 
 

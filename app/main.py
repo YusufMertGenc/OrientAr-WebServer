@@ -1,3 +1,13 @@
+"""
+API Entry Point
+
+Defines the FastAPI application and HTTP endpoints.
+Responsible for:
+- Initializing the RAG system at startup
+- Handling incoming chat requests
+- Orchestrating the RAG -> LLM -> response flow
+"""
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
