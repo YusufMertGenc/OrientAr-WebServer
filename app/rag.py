@@ -202,7 +202,11 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
     2) Candidate pool = topic-hit docs + a small global dense fallback
     3) Fast rerank -> top 3 docs to LLM
     """
-    # 1) Topic routing (no keyword heuristics)
+
+    # ✅ QUESTION EMBEDDING – SADECE 1 KEZ
+    q_emb = ollama_embed([question])[0]
+
+    # 1) Topic routing
     routed_ids = top_topics(question, top_n=5)
 
     candidate_docs: List[str] = []
@@ -215,8 +219,7 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
             seen.add(doc)
             candidate_docs.append(doc)
 
-    # 2b) Small global dense fallback (prevents missing if id/topic is weak)
-    q_emb = ollama_embed([question])[0]
+    # 2b) Small global dense fallback (AYNI q_emb KULLANILIYOR)
     try:
         results = _collection.query(
             query_embeddings=[q_emb],
