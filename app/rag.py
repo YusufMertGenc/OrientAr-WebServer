@@ -51,18 +51,20 @@ _TOPIC_EMBS: List[List[float]] = []     # embeddings for topics
 # ---------------- Embedding ----------------
 def _hash_text(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
+    # Hashing is used to create a deterministic cache key for each text.
+    # This prevents recomputing embeddings for the same input.
 
 
 def ollama_embed(texts: List[str]) -> List[List[float]]:
-    embeddings: List[List[float]] = []
+    embeddings: List[List[float]] = [] 
 
     for text in texts:
         key = _hash_text(text) #Text hashing for caching
-        if key in _EMBED_CACHE:#If already cached, use it
+        if key in _EMBED_CACHE:# If embedding already exists in memory, reuse it to reduce latency
             embeddings.append(_EMBED_CACHE[key])
             continue
 
-        resp = requests.post(
+        resp = requests.post(# Call the Ollama embedding API only if the embedding is not cached
             f"{settings.embedding_base_url}/api/embeddings",
             json={
                 "model": settings.embedding_model,
@@ -71,7 +73,7 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
             timeout=30
         )
         resp.raise_for_status()
-
+         # Store embedding both in local cache and output list
         emb = resp.json()["embedding"]
         _EMBED_CACHE[key] = emb
         embeddings.append(emb)
@@ -105,17 +107,25 @@ def id_to_topic_text(doc_id: str) -> str:
 
 
 # ---------------- Topic routing ----------------
-def top_topics(question: str, top_n: int = 7) -> List[str]:
+def top_topics(
+    question: str,
+    q_emb: List[float],
+    top_n: int = 7
+) -> List[str]:
+    # If topic index is not initialized, routing cannot be performed
     if not _TOPIC_IDS or not _TOPIC_EMBS:
         return []
 
-    q_emb = ollama_embed([question])[0]
-
     scored: List[Tuple[float, str]] = []
+
+    # Compare the already-computed question embedding with topic embeddings
     for topic_id, t_emb in zip(_TOPIC_IDS, _TOPIC_EMBS):
         scored.append((cosine_similarity(q_emb, t_emb), topic_id))
 
+    # Sort topics by similarity score in descending order
     scored.sort(reverse=True, key=lambda x: x[0])
+
+    # Return the IDs of the most relevant topics
     return [topic_id for _, topic_id in scored[:top_n]]
 
 
@@ -127,19 +137,19 @@ def rerank_documents(
     top_n: int = 3
 ) -> List[str]:
     if not docs:
-        return []
+        return [] # If no documents are provided, reranking is skipped
 
-    doc_embeddings = ollama_embed(docs)
+    doc_embeddings = ollama_embed(docs) # Generate embeddings for candidate documents (cached if possible)
 
     scored: List[Tuple[float, str]] = []
     for doc, emb in zip(docs, doc_embeddings):
-        sim = cosine_similarity(query_embedding, emb)
-        overlap = keyword_overlap_score(query, doc)
+        sim = cosine_similarity(query_embedding, emb) # Semantic similarity using cosine similarity
+        overlap = keyword_overlap_score(query, doc) # Lexical overlap to handle keyword-level relevance
         # weighted blend (fast + robust)
-        score = (0.75 * sim) + (0.25 * overlap)
+        score = (0.75 * sim) + (0.25 * overlap)  # Weighted combination balances semantic and lexical matching
         scored.append((score, doc))
 
-    scored.sort(reverse=True, key=lambda x: x[0])
+    scored.sort(reverse=True, key=lambda x: x[0]) # Sort documents by relevance score
     return [doc for _, doc in scored[:top_n]]
 
 
@@ -203,11 +213,11 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
     3) Fast rerank -> top 3 docs to LLM
     """
 
-    # ✅ QUESTION EMBEDDING – SADECE 1 KEZ
+    # ✅ QUESTION EMBEDDING – ONLY ONCE
     q_emb = ollama_embed([question])[0]
 
-    # 1) Topic routing
-    routed_ids = top_topics(question, top_n=5)
+    # 1) Topic routing (reuse q_emb)
+    routed_ids = top_topics(question, q_emb, top_n=5)
 
     candidate_docs: List[str] = []
     seen = set()
@@ -219,7 +229,7 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
             seen.add(doc)
             candidate_docs.append(doc)
 
-    # 2b) Small global dense fallback (AYNI q_emb KULLANILIYOR)
+    # 2b) Small global dense fallback (reuse same q_emb)
     try:
         results = _collection.query(
             query_embeddings=[q_emb],
