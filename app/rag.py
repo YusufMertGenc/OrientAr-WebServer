@@ -136,7 +136,7 @@ def top_topics(
 # ---------------- Reranker ----------------
 def rerank_documents(
     query: str,
-    query_embedding: List[float],  # imzada kalsın (ileride istersek kullanırız)
+    query_embedding: List[float],
     docs: List[str],
     top_n: int = 3
 ) -> List[str]:
@@ -145,12 +145,24 @@ def rerank_documents(
 
     scored: List[Tuple[float, str]] = []
 
+    # Precompute keyword set once
+    q_words = set(query.lower().split())
+
     for doc in docs:
-        overlap = keyword_overlap_score(query, doc)
-        scored.append((overlap, doc))
+        # Lexical signal
+        d_words = set(doc.lower().split())
+        overlap = len(q_words & d_words) / max(len(q_words), 1)
+
+        # Lightweight semantic proxy (length-normalized)
+        semantic_hint = min(len(d_words) / 100.0, 1.0)
+
+        # Hybrid score
+        score = (0.6 * overlap) + (0.4 * semantic_hint)
+        scored.append((score, doc))
 
     scored.sort(reverse=True, key=lambda x: x[0])
     return [doc for _, doc in scored[:top_n]]
+
 
 
 
