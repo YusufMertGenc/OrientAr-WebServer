@@ -45,6 +45,22 @@ JSON FORMAT:
 
 """
 
+def _clean_json_string(text: str) -> str:
+    """Markdown taglerini temizler ve sadece { } arasındaki JSON'ı alır."""
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    
+    # İlk { ve son } bularak aradaki temiz JSON'ı al
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1:
+        return text[start:end+1]
+    return text.strip()
 
 def build_intent_prompt(question: str, context_passages: List[str]) -> str:
     # hard limit context size for speed
@@ -80,33 +96,37 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         "temperature": 0.2,
         "options": {
             "num_ctx": 1024,
-            "num_predict": 64
+            "num_predict": 64  # Senin ayarın (Not: Cevap uzunsa JSON kesilebilir!)
         },
         "stream": False
     }
 
-    resp = requests.post(
-        f"{settings.llm_base_url}/api/chat",
-        json=payload,
-        timeout=120
-    )
-    resp.raise_for_status()
-
-    raw = resp.json()["message"]["content"].strip()
-
-    # 🔥 JSON STRING GELİRSE AÇ
     try:
-        parsed = json.loads(raw)
+        resp = requests.post(
+            f"{settings.llm_base_url}/api/chat",
+            json=payload,
+            timeout=120
+        )
+        resp.raise_for_status()
 
-        # 🔥 SADECE İÇ MESSAGE’I AL
+        raw = resp.json()["message"]["content"]
+        
+        # 🔥 ÖNCE TEMİZLE
+        cleaned_json = _clean_json_string(raw)
+
+        # 🔥 SONRA PARSE ET
+        parsed = json.loads(cleaned_json)
+
         return {
             "message": parsed.get("message", "").strip(),
             "confidence": float(parsed.get("confidence", 0.5))
         }
 
-    except json.JSONDecodeError:
-        # zaten düz metinse
+    except (json.JSONDecodeError, ValueError):
+        # Temizlemeye rağmen bozuksa (örn. num_predict yetmedi ve JSON yarım kaldıysa)
+        # Ham metni döndür ama JSON süslerini temizlemeye çalış
+        clean_raw = raw.replace('{"message":', '').replace('}', '').replace('"', '').strip()
         return {
-            "message": raw,
+            "message": clean_raw, # En azından okunaklı metin döner
             "confidence": 0.5
         }
