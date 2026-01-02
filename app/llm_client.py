@@ -100,7 +100,6 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         if raw.lower().startswith("json"):
             raw = raw[4:].strip()
 
-    # 🔥 1. PARSE DENEMESİ
     try:
         parsed = json.loads(raw)
     except Exception:
@@ -112,29 +111,17 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     message = parsed.get("message", "")
     confidence = float(parsed.get("confidence", 0.5))
 
-    # 🔥🔥 ASIL PROBLEM BURASIYDI
-    # Eğer message ESCAPED JSON ise → UNESCAPE + PARSE
-    if isinstance(message, str):
-        msg = message.strip()
+    # 🔥🔥🔥 ASIL FIX (TÜM SORUN BURADAYDI)
+    if isinstance(message, list):
+        # liste → düzgün metin
+        message = "\n".join(str(m) for m in message)
 
-        # durum: "{ \"message\": \"...\" }"
-        if msg.startswith("{") and "\\\"" in msg:
-            try:
-                unescaped = msg.encode("utf-8").decode("unicode_escape")
-                inner = json.loads(unescaped)
-                message = inner.get("message", message)
-                confidence = float(inner.get("confidence", confidence))
-            except Exception:
-                message = msg
+    elif isinstance(message, dict):
+        # dict → stringify ama okunur
+        message = json.dumps(message, ensure_ascii=False)
 
-        # durum: "{\"message\":\"...\"}"
-        elif msg.startswith("{") and msg.endswith("}"):
-            try:
-                inner = json.loads(msg)
-                message = inner.get("message", message)
-                confidence = float(inner.get("confidence", confidence))
-            except Exception:
-                pass
+    elif not isinstance(message, str):
+        message = str(message)
 
     return {
         "message": message.strip(),
