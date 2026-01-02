@@ -92,25 +92,21 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     )
     resp.raise_for_status()
 
-    raw = resp.json()["message"]["content"]
+    raw = resp.json()["message"]["content"].strip()
 
-    # 🔥🔥🔥 TEK GERÇEK ÇÖZÜM 🔥🔥🔥
-    # raw bir STRING ve içinde JSON var → direkt içini al
+    # 🔥 JSON STRING GELİRSE AÇ
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        inner_json = raw[start:end]
-        parsed = json.loads(inner_json)
+        parsed = json.loads(raw)
 
+        # 🔥 SADECE İÇ MESSAGE’I AL
         return {
-            "message": str(parsed.get("message", "")).strip(),
+            "message": parsed.get("message", "").strip(),
             "confidence": float(parsed.get("confidence", 0.5))
         }
 
-    except Exception:
-        # ne olursa olsun UI’ye DÜZ METİN ver
+    except json.JSONDecodeError:
+        # zaten düz metinse
         return {
-            "message": raw.strip(),
+            "message": raw,
             "confidence": 0.5
         }
-
