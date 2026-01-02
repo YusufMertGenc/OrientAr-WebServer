@@ -69,6 +69,8 @@ QUESTION:
 import json
 
 def generate_intent_response(question: str, context_passages: List[str]) -> dict:
+    
+    print(">>> NEW generate_intent_response IS RUNNING <<<")
     payload = {
         "model": settings.llm_model,
         "messages": [
