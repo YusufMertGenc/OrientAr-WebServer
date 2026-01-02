@@ -267,5 +267,7 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
         docs=candidate_docs,
         top_n=3
     )
+    if not best_docs:
+        best_docs = candidate_docs[:3]
 
     return {"documents": best_docs}
