@@ -56,29 +56,33 @@ def _hash_text(text: str) -> str:
 
 
 def ollama_embed(texts: List[str]) -> List[List[float]]:
-    embeddings: List[List[float]] = [] 
+    embeddings: List[List[float]] = []
 
     for text in texts:
-        key = _hash_text(text) #Text hashing for caching
-        if key in _EMBED_CACHE:# If embedding already exists in memory, reuse it to reduce latency
+        key = _hash_text(text)
+        if key in _EMBED_CACHE:
             embeddings.append(_EMBED_CACHE[key])
             continue
 
-        resp = requests.post(# Call the Ollama embedding API only if the embedding is not cached
+        resp = requests.post(
             f"{settings.embedding_base_url}/api/embeddings",
             json={
                 "model": settings.embedding_model,
-                "prompt": text
+                "input": text,                 # ✅ DOĞRU embedding alanı
+                "options": {
+                    "num_ctx": 512              # ✅ küçük context = büyük hız
+                }
             },
             timeout=30
         )
         resp.raise_for_status()
-         # Store embedding both in local cache and output list
+
         emb = resp.json()["embedding"]
         _EMBED_CACHE[key] = emb
         embeddings.append(emb)
 
     return embeddings
+
 
 
 # ---------------- Similarity ----------------
@@ -132,25 +136,22 @@ def top_topics(
 # ---------------- Reranker ----------------
 def rerank_documents(
     query: str,
-    query_embedding: List[float],
+    query_embedding: List[float],  # imzada kalsın (ileride istersek kullanırız)
     docs: List[str],
     top_n: int = 3
 ) -> List[str]:
     if not docs:
-        return [] # If no documents are provided, reranking is skipped
-
-    doc_embeddings = ollama_embed(docs) # Generate embeddings for candidate documents (cached if possible)
+        return []
 
     scored: List[Tuple[float, str]] = []
-    for doc, emb in zip(docs, doc_embeddings):
-        sim = cosine_similarity(query_embedding, emb) # Semantic similarity using cosine similarity
-        overlap = keyword_overlap_score(query, doc) # Lexical overlap to handle keyword-level relevance
-        # weighted blend (fast + robust)
-        score = (0.75 * sim) + (0.25 * overlap)  # Weighted combination balances semantic and lexical matching
-        scored.append((score, doc))
 
-    scored.sort(reverse=True, key=lambda x: x[0]) # Sort documents by relevance score
+    for doc in docs:
+        overlap = keyword_overlap_score(query, doc)
+        scored.append((overlap, doc))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
     return [doc for _, doc in scored[:top_n]]
+
 
 
 # ---------------- Load KB ----------------
@@ -213,7 +214,7 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
     3) Fast rerank -> top 3 docs to LLM
     """
 
-    # ✅ QUESTION EMBEDDING – ONLY ONCE
+    #  QUESTION EMBEDDING – ONLY ONCE
     q_emb = ollama_embed([question])[0]
 
     # 1) Topic routing (reuse q_emb)
