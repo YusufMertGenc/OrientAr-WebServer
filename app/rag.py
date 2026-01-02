@@ -68,26 +68,24 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
             f"{settings.embedding_base_url}/api/embeddings",
             json={
                 "model": settings.embedding_model,
-                "input": text,
-                "options": {
-                    "num_ctx": 512
-                }
+                "prompt": text          # 🔥 DOĞRU ALAN BU
             },
             timeout=60
         )
 
         if resp.status_code != 200:
-            raise RuntimeError(f"Embedding failed for text: {text[:50]}")
+            raise RuntimeError(f"Embedding request failed: {resp.text}")
 
         data = resp.json()
         if "embedding" not in data or not data["embedding"]:
-            raise RuntimeError("Empty embedding returned from Ollama")
+            raise RuntimeError(f"Empty embedding returned from Ollama for model {settings.embedding_model}")
 
         emb = data["embedding"]
         _EMBED_CACHE[key] = emb
         embeddings.append(emb)
 
     return embeddings
+
 
 
 
