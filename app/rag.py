@@ -118,25 +118,26 @@ def id_to_topic_text(doc_id: str) -> str:
 
 # ---------------- Topic routing ----------------
 def top_topics(
-    question: str,
     q_emb: List[float],
     top_n: int = 7
-) -> List[str]:
+) -> List[Tuple[str, float]]:
     # If topic index is not initialized, routing cannot be performed
     if not _TOPIC_IDS or not _TOPIC_EMBS:
         return []
 
-    scored: List[Tuple[float, str]] = []
+    scored: List[Tuple[str, float]] = []
 
-    # Compare the already-computed question embedding with topic embeddings
+    # Compare question embedding with topic embeddings
     for topic_id, t_emb in zip(_TOPIC_IDS, _TOPIC_EMBS):
-        scored.append((cosine_similarity(q_emb, t_emb), topic_id))
+        sim = cosine_similarity(q_emb, t_emb)
+        scored.append((topic_id, sim))
 
-    # Sort topics by similarity score in descending order
-    scored.sort(reverse=True, key=lambda x: x[0])
+    # Sort by similarity score
+    scored.sort(key=lambda x: x[1], reverse=True)
 
-    # Return the IDs of the most relevant topics
-    return [topic_id for _, topic_id in scored[:top_n]]
+    # Return (topic_id, similarity_score)
+    return scored[:top_n]
+
 
 
 # ---------------- Reranker ----------------
@@ -211,17 +212,17 @@ def load_kb_to_chroma():
     except Exception:
         pass
     doc_embeddings = ollama_embed(docs)
-    # Embed documents once and add
+
     if not doc_embeddings or len(doc_embeddings) != len(docs):
         raise RuntimeError("Document embeddings could not be generated correctly")
 
-    doc_embeddings = ollama_embed(docs)
     _collection.add(
         ids=ids,
         documents=docs,
         metadatas=metas,
         embeddings=doc_embeddings
     )
+
 
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
@@ -235,23 +236,35 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
     3) Fast rerank -> top 3 docs to LLM
     """
 
-    #  QUESTION EMBEDDING – ONLY ONCE
+    # 1) QUESTION EMBEDDING – ONLY ONCE
     q_emb = ollama_embed([question])[0]
 
-    # 1) Topic routing (reuse q_emb)
-    routed_ids = top_topics(question, q_emb, top_n=5)
+    # 2) Topic routing (semantic)
+    routed_topics = top_topics(q_emb, top_n=5)
+
+    # DOMAIN RELEVANCE SCORE (semantic, keyword-free)
+    max_topic_score = max((score for _, score in routed_topics), default=0.0)
+
+    # Domain guard
+    if max_topic_score < 0.35:
+        return {
+            "documents": [],
+            "domain_score": max_topic_score
+        }
+
+    routed_ids = [topic_id for topic_id, _ in routed_topics]
 
     candidate_docs: List[str] = []
     seen = set()
 
-    # 2a) Add docs from routed topics
+    # 3a) Add docs from routed topics
     for doc_id in routed_ids:
         doc = _KB_BY_ID.get(doc_id)
         if doc and doc not in seen:
             seen.add(doc)
             candidate_docs.append(doc)
 
-    # 2b) Small global dense fallback (reuse same q_emb)
+    # 3b) Small global dense fallback
     try:
         results = _collection.query(
             query_embeddings=[q_emb],
@@ -267,16 +280,24 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
         pass
 
     if not candidate_docs:
-        return {"documents": []}
+        return {
+            "documents": [],
+            "domain_score": max_topic_score
+        }
 
-    # 3) Rerank and return top docs
+    # 4) Rerank (lightweight)
     best_docs = rerank_documents(
         query=question,
         query_embedding=q_emb,
         docs=candidate_docs,
         top_n=3
     )
+
     if not best_docs:
         best_docs = candidate_docs[:3]
 
-    return {"documents": best_docs}
+    return {
+        "documents": best_docs,
+        "domain_score": max_topic_score
+    }
+
