@@ -71,8 +71,6 @@ QUESTION:
 import json
 
 def generate_intent_response(question: str, context_passages: List[str]) -> dict:
-    print(">>> NEW generate_intent_response IS RUNNING <<<")
-
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -82,7 +80,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         "temperature": 0.2,
         "options": {
             "num_ctx": 1024,
-            "num_predict": 48
+            "num_predict": 64
         },
         "stream": False
     }
@@ -94,38 +92,25 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     )
     resp.raise_for_status()
 
-    raw = resp.json()["message"]["content"].strip()
+    raw = resp.json()["message"]["content"]
 
-    # --- code block temizleme ---
-    if raw.startswith("```"):
-        raw = raw.strip("`").strip()
-        if raw.lower().startswith("json"):
-            raw = raw[4:].strip()
-
+    # 🔥🔥🔥 TEK GERÇEK ÇÖZÜM 🔥🔥🔥
+    # raw bir STRING ve içinde JSON var → direkt içini al
     try:
-        parsed = json.loads(raw)
-    except Exception:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        inner_json = raw[start:end]
+        parsed = json.loads(inner_json)
+
         return {
-            "message": raw,
+            "message": str(parsed.get("message", "")).strip(),
+            "confidence": float(parsed.get("confidence", 0.5))
+        }
+
+    except Exception:
+        # ne olursa olsun UI’ye DÜZ METİN ver
+        return {
+            "message": raw.strip(),
             "confidence": 0.5
         }
 
-    message = parsed.get("message", "")
-    confidence = float(parsed.get("confidence", 0.5))
-
-    # 🔥🔥🔥 ASIL FIX (TÜM SORUN BURADAYDI)
-    if isinstance(message, list):
-        # liste → düzgün metin
-        message = "\n".join(str(m) for m in message)
-
-    elif isinstance(message, dict):
-        # dict → stringify ama okunur
-        message = json.dumps(message, ensure_ascii=False)
-
-    elif not isinstance(message, str):
-        message = str(message)
-
-    return {
-        "message": message.strip(),
-        "confidence": confidence
-    }
