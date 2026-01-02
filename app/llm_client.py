@@ -92,23 +92,26 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
 
     raw = resp.json()["message"]["content"].strip()
 
-    # 🔥 CODE BLOCK TEMİZLEME
+    # ---- CODE BLOCK TEMİZLEME ----
     if raw.startswith("```"):
-        raw = raw.strip("`")
-        if raw.startswith("json"):
+        raw = raw.strip("`").strip()
+        if raw.lower().startswith("json"):
             raw = raw[4:].strip()
 
     try:
         parsed = json.loads(raw)
 
-        # extra safety
-        if not isinstance(parsed, dict):
-            raise ValueError("Parsed LLM output is not a dict")
-
-        return parsed
+        # 🔥 KRİTİK NOKTA:
+        # UI'ye SADECE düz metni döndürüyoruz
+        return {
+            "message": parsed.get("message", "").strip(),
+            "confidence": float(parsed.get("confidence", 0.5))
+        }
 
     except Exception:
+        # Model JSON yerine düz metin döndürürse
         return {
-            "message": raw,
+            "message": raw.strip(),
             "confidence": 0.5
         }
+
