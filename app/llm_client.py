@@ -34,6 +34,8 @@ Rules:
 - If the answer cannot be derived from the context, say you do not know.
 - Do NOT make assumptions or add external information.
 - Respond ONLY with valid JSON.
+- The value of "message" MUST be plain text.
+- DO NOT put JSON, lists, or objects inside the "message" field.
 
 JSON FORMAT:
 {
