@@ -66,6 +66,8 @@ QUESTION:
 """.strip()
 
 
+import json
+
 def generate_intent_response(question: str, context_passages: List[str]) -> dict:
     payload = {
         "model": settings.llm_model,
@@ -88,11 +90,24 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     )
     resp.raise_for_status()
 
-    raw = resp.json()["message"]["content"]
+    raw = resp.json()["message"]["content"].strip()
+
+    # 🔥 CODE BLOCK TEMİZLEME
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.startswith("json"):
+            raw = raw[4:].strip()
 
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
+        parsed = json.loads(raw)
+
+        # extra safety
+        if not isinstance(parsed, dict):
+            raise ValueError("Parsed LLM output is not a dict")
+
+        return parsed
+
+    except Exception:
         return {
             "message": raw,
             "confidence": 0.5
