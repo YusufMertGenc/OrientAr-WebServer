@@ -68,20 +68,28 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
             f"{settings.embedding_base_url}/api/embeddings",
             json={
                 "model": settings.embedding_model,
-                "input": text,                 # ✅ DOĞRU embedding alanı
+                "input": text,
                 "options": {
-                    "num_ctx": 512              # ✅ küçük context = büyük hız
+                    "num_ctx": 512
                 }
             },
-            timeout=30
+            timeout=60
         )
-        resp.raise_for_status()
 
-        emb = resp.json()["embedding"]
+        if resp.status_code != 200:
+            raise RuntimeError(f"Embedding failed for text: {text[:50]}")
+
+        data = resp.json()
+        if "embedding" not in data or not data["embedding"]:
+            raise RuntimeError("Empty embedding returned from Ollama")
+
+        emb = data["embedding"]
         _EMBED_CACHE[key] = emb
         embeddings.append(emb)
 
     return embeddings
+
+
 
 
 
@@ -206,6 +214,9 @@ def load_kb_to_chroma():
         pass
 
     # Embed documents once and add
+    if not doc_embeddings or len(doc_embeddings) != len(docs):
+        raise RuntimeError("Document embeddings could not be generated correctly")
+
     doc_embeddings = ollama_embed(docs)
     _collection.add(
         ids=ids,
