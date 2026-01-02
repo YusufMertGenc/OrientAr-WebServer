@@ -210,7 +210,7 @@ def load_kb_to_chroma():
             _collection.delete(ids=existing["ids"])
     except Exception:
         pass
-
+    doc_embeddings = ollama_embed(docs)
     # Embed documents once and add
     if not doc_embeddings or len(doc_embeddings) != len(docs):
         raise RuntimeError("Document embeddings could not be generated correctly")
