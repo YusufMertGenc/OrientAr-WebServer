@@ -69,8 +69,8 @@ QUESTION:
 import json
 
 def generate_intent_response(question: str, context_passages: List[str]) -> dict:
-    
     print(">>> NEW generate_intent_response IS RUNNING <<<")
+
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -94,7 +94,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
 
     raw = resp.json()["message"]["content"].strip()
 
-    # ---- CODE BLOCK TEMİZLEME ----
+    # --- code block temizleme ---
     if raw.startswith("```"):
         raw = raw.strip("`").strip()
         if raw.lower().startswith("json"):
@@ -103,17 +103,27 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
     try:
         parsed = json.loads(raw)
 
-        # 🔥 KRİTİK NOKTA:
-        # UI'ye SADECE düz metni döndürüyoruz
+        message = parsed.get("message", "")
+        confidence = float(parsed.get("confidence", 0.5))
+
+        # 🔥 ASIL FIX BURASI 🔥
+        # Eğer message'ın kendisi JSON ise → tekrar parse et
+        if isinstance(message, str) and message.strip().startswith("{"):
+            try:
+                inner = json.loads(message)
+                message = inner.get("message", message)
+                confidence = float(inner.get("confidence", confidence))
+            except Exception:
+                pass
+
         return {
-            "message": parsed.get("message", "").strip(),
-            "confidence": float(parsed.get("confidence", 0.5))
+            "message": message.strip(),
+            "confidence": confidence
         }
 
     except Exception:
-        # Model JSON yerine düz metin döndürürse
         return {
-            "message": raw.strip(),
+            "message": raw,
             "confidence": 0.5
         }
 
