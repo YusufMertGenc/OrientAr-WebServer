@@ -86,6 +86,9 @@ QUESTION:
 
 import json
 
+import re  # <--- Bunu en tepeye ekle
+
+# generate_intent_response fonksiyonunu komple bununla değiştir:
 def generate_intent_response(question: str, context_passages: List[str]) -> dict:
     payload = {
         "model": settings.llm_model,
@@ -96,7 +99,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         "temperature": 0.2,
         "options": {
             "num_ctx": 1024,
-            "num_predict": 64  # Senin ayarın (Not: Cevap uzunsa JSON kesilebilir!)
+            "num_predict": 64 
         },
         "stream": False
     }
@@ -108,25 +111,31 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
             timeout=120
         )
         resp.raise_for_status()
-
         raw = resp.json()["message"]["content"]
-        
-        # 🔥 ÖNCE TEMİZLE
-        cleaned_json = _clean_json_string(raw)
 
-        # 🔥 SONRA PARSE ET
-        parsed = json.loads(cleaned_json)
-
-        return {
-            "message": parsed.get("message", "").strip(),
-            "confidence": float(parsed.get("confidence", 0.5))
-        }
+        # Önce temizlemeyi dene
+        cleaned = _clean_json_string(raw)
+        return json.loads(cleaned)
 
     except (json.JSONDecodeError, ValueError):
-        # Temizlemeye rağmen bozuksa (örn. num_predict yetmedi ve JSON yarım kaldıysa)
-        # Ham metni döndür ama JSON süslerini temizlemeye çalış
-        clean_raw = raw.replace('{"message":', '').replace('}', '').replace('"', '').strip()
+        # 🔥 BURASI ÖNEMLİ: JSON patladıysa ham metni basma!
+        # Regex ile sadece "message"ın karşısındaki yazıyı al.
+        
+        # 1. Regex ile çekmeye çalış (en temiz yöntem)
+        match = re.search(r'(?:"?message"?\s*:\s*"?)(.*?)(?:["}]|$)', raw, re.DOTALL)
+        
+        if match:
+            text = match.group(1).strip()
+            # Eğer kesildiği için sonda tırnak (") kaldıysa sil
+            if text.endswith('"'): text = text[:-1]
+            return {"message": text, "confidence": 0.5}
+
+        # 2. Regex de bulamazsa manuel temizlik (Brute force)
+        text = raw.replace('{"message":', '').replace('message:', '').replace('{', '').replace('}', '').strip()
+        if text.startswith('"'): text = text[1:]
+        if text.endswith('"'): text = text[:-1]
+        
         return {
-            "message": clean_raw, # En azından okunaklı metin döner
+            "message": text,
             "confidence": 0.5
         }
