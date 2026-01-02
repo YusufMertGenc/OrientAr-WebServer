@@ -100,30 +100,43 @@ def generate_intent_response(question: str, context_passages: List[str]) -> dict
         if raw.lower().startswith("json"):
             raw = raw[4:].strip()
 
+    # 🔥 1. PARSE DENEMESİ
     try:
         parsed = json.loads(raw)
-
-        message = parsed.get("message", "")
-        confidence = float(parsed.get("confidence", 0.5))
-
-        # 🔥 ASIL FIX BURASI 🔥
-        # Eğer message'ın kendisi JSON ise → tekrar parse et
-        if isinstance(message, str) and message.strip().startswith("{"):
-            try:
-                inner = json.loads(message)
-                message = inner.get("message", message)
-                confidence = float(inner.get("confidence", confidence))
-            except Exception:
-                pass
-
-        return {
-            "message": message.strip(),
-            "confidence": confidence
-        }
-
     except Exception:
         return {
             "message": raw,
             "confidence": 0.5
         }
 
+    message = parsed.get("message", "")
+    confidence = float(parsed.get("confidence", 0.5))
+
+    # 🔥🔥 ASIL PROBLEM BURASIYDI
+    # Eğer message ESCAPED JSON ise → UNESCAPE + PARSE
+    if isinstance(message, str):
+        msg = message.strip()
+
+        # durum: "{ \"message\": \"...\" }"
+        if msg.startswith("{") and "\\\"" in msg:
+            try:
+                unescaped = msg.encode("utf-8").decode("unicode_escape")
+                inner = json.loads(unescaped)
+                message = inner.get("message", message)
+                confidence = float(inner.get("confidence", confidence))
+            except Exception:
+                message = msg
+
+        # durum: "{\"message\":\"...\"}"
+        elif msg.startswith("{") and msg.endswith("}"):
+            try:
+                inner = json.loads(msg)
+                message = inner.get("message", message)
+                confidence = float(inner.get("confidence", confidence))
+            except Exception:
+                pass
+
+    return {
+        "message": message.strip(),
+        "confidence": confidence
+    }
