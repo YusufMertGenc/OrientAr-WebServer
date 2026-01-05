@@ -716,5 +716,10 @@
   {
     "id": "transportation_to_campus_info",
     "content":"you can take the KIBHAS shuttle service from Ercan Airport to the campus or use taxi services for local transportation."
+  },
+  {
+    "id": "student_id_card_info",
+    "content":"you can visit student affairs office to get your student ID card physically after activating your university account."
+
   }
 ]
