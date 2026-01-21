@@ -177,17 +177,10 @@ def rerank_documents(
 def load_kb_to_chroma():
     global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS
 
-    try:
-        if _collection.count() > 0:
-            print("Chroma already populated, skipping embedding.")
-            return
-    except Exception:
-        pass
-
-
     if not _data_path.exists():
         raise FileNotFoundError("campus_kb.json not found")
 
+    # 1) JSON'u her zaman oku (restart'ta da)
     with open(_data_path, "r", encoding="utf-8") as f:
         kb_items = json.load(f)
 
@@ -195,57 +188,48 @@ def load_kb_to_chroma():
     docs = [item["content"] for item in kb_items]
 
     _KB_BY_ID = {i: d for i, d in zip(ids, docs)}
-
-    # Build topic index from ids (KB-driven, no hardcoded keywords)
     _TOPIC_IDS = ids
-    _TOPIC_TEXTS = [id_to_topic_text(i) for i in ids]
+    # 2) Topic text'i güçlendir (sadece id değil, content'in ilk kısmı da)
+    _TOPIC_TEXTS = [
+        f"{id_to_topic_text(i)}. {(_KB_BY_ID[i][:200]).strip()}"
+        for i in ids
+    ]
     _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
 
-    # (Optional) keep metadata for trace/debug
-    metas = [{"id": item_id, "topic": id_to_topic_text(item_id)} for item_id in ids]
-
-    # Clean existing collection
+    # 3) Chroma doluysa sadece index yükledik, çık
     try:
-        existing = _collection.get(include=[])
-        if existing.get("ids"):
-            _collection.delete(ids=existing["ids"])
+        if _collection.count() > 0:
+            print("Chroma already populated -> skipping doc embedding build, using existing store.")
+            return
     except Exception:
         pass
+
+    # 4) İlk kez dolduruluyorsa embeddings üret ve add et
+    metas = [{"id": item_id, "topic": id_to_topic_text(item_id)} for item_id in ids]
     doc_embeddings = ollama_embed(docs)
 
-    if not doc_embeddings or len(doc_embeddings) != len(docs):
-        raise RuntimeError("Document embeddings could not be generated correctly")
-
-    _collection.add(
-        ids=ids,
-        documents=docs,
-        metadatas=metas,
-        embeddings=doc_embeddings
-    )
-
-
+    _collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=doc_embeddings)
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
 
+
 # ---------------- Main RAG ----------------
-def rag_query(question: str, top_k: int = 8) -> Dict:
+def rag_query(question: str, top_k: int = 10) -> Dict:
     """
-    Enterprise-style flow (KB-driven):
-    1) Topic routing using embeddings of KB IDs (self-describing topics)
-    2) Candidate pool = topic-hit docs + a small global dense fallback
-    3) Fast rerank -> top 3 docs to LLM
+    Improved KB-driven RAG:
+    1) Topic routing (semantic, ID-as-topic)
+    2) Candidate pool = routed docs + global dense retrieval
+    3) Hybrid rerank using Chroma distance + lexical overlap
     """
 
-    # 1) QUESTION EMBEDDING – ONLY ONCE
+    # 1) QUESTION EMBEDDING (once)
     q_emb = ollama_embed([question])[0]
 
-    # 2) Topic routing (semantic)
+    # 2) Topic routing
     routed_topics = top_topics(q_emb, top_n=5)
-
-    # DOMAIN RELEVANCE SCORE (semantic, keyword-free)
     max_topic_score = max((score for _, score in routed_topics), default=0.0)
 
-    # Domain guard
+    # Domain relevance guard (same as before)
     if max_topic_score < 0.35:
         return {
             "documents": [],
@@ -257,47 +241,63 @@ def rag_query(question: str, top_k: int = 8) -> Dict:
     candidate_docs: List[str] = []
     seen = set()
 
-    # 3a) Add docs from routed topics
+    # 3a) Routed-topic docs (high precision)
     for doc_id in routed_ids:
         doc = _KB_BY_ID.get(doc_id)
         if doc and doc not in seen:
             seen.add(doc)
             candidate_docs.append(doc)
 
-    # 3b) Small global dense fallback
+    # 3b) Global dense fallback (with distance)
+    dense_docs = []
     try:
         results = _collection.query(
             query_embeddings=[q_emb],
             n_results=top_k,
-            include=["documents"]
+            include=["documents", "distances"]
         )
-        dense_docs = results.get("documents", [[]])[0]
-        for d in dense_docs:
-            if d and d not in seen:
-                seen.add(d)
-                candidate_docs.append(d)
+        docs = results.get("documents", [[]])[0]
+        dists = results.get("distances", [[]])[0]
+
+        for doc, dist in zip(docs, dists):
+            if doc and doc not in seen:
+                dense_docs.append((doc, dist))
+                seen.add(doc)
     except Exception:
         pass
 
-    if not candidate_docs:
+    # Nothing found at all
+    if not candidate_docs and not dense_docs:
         return {
             "documents": [],
             "domain_score": max_topic_score
         }
 
-    # 4) Rerank (lightweight)
-    best_docs = rerank_documents(
-        query=question,
-        query_embedding=q_emb,
-        docs=candidate_docs,
-        top_n=3
-    )
+    # 4) Hybrid rerank (semantic distance + keyword overlap)
+    scored: List[Tuple[float, str]] = []
 
-    if not best_docs:
-        best_docs = candidate_docs[:3]
+    q_words = set(question.lower().split())
+
+    # Routed docs: boost slightly (they passed topic routing)
+    for doc in candidate_docs:
+        d_words = set(doc.lower().split())
+        overlap = len(q_words & d_words) / max(len(q_words), 1)
+        score = 0.6 + (0.4 * overlap)   # base boost
+        scored.append((score, doc))
+
+    # Dense docs: use distance → similarity
+    for doc, dist in dense_docs:
+        d_words = set(doc.lower().split())
+        overlap = len(q_words & d_words) / max(len(q_words), 1)
+        semantic_sim = 1.0 / (1.0 + dist)   # distance → similarity
+        score = (0.7 * semantic_sim) + (0.3 * overlap)
+        scored.append((score, doc))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+
+    best_docs = [doc for _, doc in scored[:3]]
 
     return {
         "documents": best_docs,
         "domain_score": max_topic_score
     }
-
