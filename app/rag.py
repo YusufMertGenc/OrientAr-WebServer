@@ -22,17 +22,32 @@ import hashlib
 import math
 from pathlib import Path
 from typing import Dict, List, Tuple
-
+from .firebase_kb import init_firebase, fetch_kb_items, fetch_kb_version
 import requests
 from chromadb import PersistentClient
 
 from .config import settings
 
+META_DOC_ID = "__kb_meta__"
 
-# ---- Paths ----
-_base_dir = Path(__file__).resolve().parent.parent
-_data_path = _base_dir / "data" / "campus_kb.json"
+def get_indexed_kb_version() -> str | None:
+    try:
+        res = _collection.get(ids=[META_DOC_ID], include=["metadatas"])
+        metas = res.get("metadatas", [])
+        if metas and metas[0]:
+            return metas[0].get("kbVersion")
+    except Exception:
+        pass
+    return None
 
+def set_indexed_kb_version(kb_version: str):
+    # small meta doc so we can compare versions on restart
+    _collection.upsert(
+        ids=[META_DOC_ID],
+        documents=["kb meta"],
+        metadatas=[{"kbVersion": kb_version}],
+        embeddings=ollama_embed(["kb meta"])
+    )
 
 # ---- Chroma ----
 _chroma_client = PersistentClient(path=settings.chroma_path)
@@ -174,44 +189,66 @@ def rerank_documents(
 
 
 # ---------------- Load KB ----------------
-def load_kb_to_chroma():
+def load_kb_to_chroma(service_account_path: str | None = None):
     global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS
 
-    if not _data_path.exists():
-        raise FileNotFoundError("campus_kb.json not found")
+    # 0) Firebase init (once)
+    init_firebase(service_account_path)
 
-    # 1) JSON'u her zaman oku (restart'ta da)
-    with open(_data_path, "r", encoding="utf-8") as f:
-        kb_items = json.load(f)
+    # 1) Firestore'dan ham KB çek
+    kb_version = fetch_kb_version()
+    kb_items = fetch_kb_items()
+
+    if not kb_items:
+        raise RuntimeError("Firestore KB is empty (chatbot_kb_items).")
 
     ids = [item["id"] for item in kb_items]
     docs = [item["content"] for item in kb_items]
 
+    # 2) In-memory indexler (restart bug'ı burada biter)
     _KB_BY_ID = {i: d for i, d in zip(ids, docs)}
     _TOPIC_IDS = ids
-    # 2) Topic text'i güçlendir (sadece id değil, content'in ilk kısmı da)
+
+    # Topic text: id + snippet (routing güçlensin)
     _TOPIC_TEXTS = [
         f"{id_to_topic_text(i)}. {(_KB_BY_ID[i][:200]).strip()}"
         for i in ids
     ]
     _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
 
-    # 3) Chroma doluysa sadece index yükledik, çık
+    # 3) Chroma version check
+    indexed_version = get_indexed_kb_version()
     try:
-        if _collection.count() > 0:
-            print("Chroma already populated -> skipping doc embedding build, using existing store.")
-            return
+        chroma_has_docs = _collection.count() > 0
+    except Exception:
+        chroma_has_docs = False
+
+    if chroma_has_docs and indexed_version == kb_version:
+        print(f"Chroma up-to-date. kbVersion={kb_version}. Skipping doc embedding build.")
+        return
+
+    # 4) Rebuild Chroma (simple + safe)
+    print(f"Rebuilding Chroma. Firestore kbVersion={kb_version}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
+
+    try:
+        existing = _collection.get(include=[])
+        if existing.get("ids"):
+            _collection.delete(ids=existing["ids"])
     except Exception:
         pass
 
-    # 4) İlk kez dolduruluyorsa embeddings üret ve add et
     metas = [{"id": item_id, "topic": id_to_topic_text(item_id)} for item_id in ids]
     doc_embeddings = ollama_embed(docs)
 
-    _collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=doc_embeddings)
+    _collection.add(
+        ids=ids,
+        documents=docs,
+        metadatas=metas,
+        embeddings=doc_embeddings
+    )
+
+    set_indexed_kb_version(kb_version)
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
-
-
 
 # ---------------- Main RAG ----------------
 def rag_query(question: str, top_k: int = 10) -> Dict:

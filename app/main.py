@@ -8,7 +8,7 @@ Responsible for:
 - Orchestrating the RAG -> LLM -> response flow
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import ChatRequest, ChatResponse
@@ -28,8 +28,8 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def startup_event():
-    load_kb_to_chroma()
+def startup():
+    load_kb_to_chroma()   # path verme artık
 
 
 @app.get("/health")

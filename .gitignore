@@ -16,3 +16,6 @@ chroma_db/
 
 # OS
 .DS_Store
+# Firebase admin keys
+**/*firebase-adminsdk*.json
+**/serviceAccountKey.json
