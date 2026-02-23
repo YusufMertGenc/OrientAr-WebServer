@@ -29,7 +29,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    load_kb_to_chroma()   # path verme artık
+    load_kb_to_chroma()
+    from .rag import start_kb_watcher
+    start_kb_watcher(interval_sec=600)   # path verme artık
 
 
 @app.get("/health")

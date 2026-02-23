@@ -338,3 +338,43 @@ def rag_query(question: str, top_k: int = 10) -> Dict:
         "documents": best_docs,
         "domain_score": max_topic_score
     }
+
+# rag.py içine ekle
+
+import threading
+import time
+from .firebase_kb import fetch_kb_fingerprint
+
+_last_fp = None
+_watcher_started = False
+
+def start_kb_watcher(interval_sec: int = 600):
+    global _watcher_started
+    if _watcher_started:
+        return
+    _watcher_started = True
+
+    def _loop():
+        global _last_fp
+        while True:
+            try:
+                fp = fetch_kb_fingerprint()  # (count, max_update_time_iso)
+
+                # ilk kez
+                if _last_fp is None:
+                    _last_fp = fp
+                else:
+                    if fp != _last_fp:
+                        print(f"[KB WATCHER] Change detected. old={_last_fp}, new={fp}. Rebuilding...")
+                        load_kb_to_chroma()   # zaten init_firebase içeride
+                        _last_fp = fp
+                    else:
+                        print(f"[KB WATCHER] No change. fp={fp}")
+
+            except Exception as e:
+                print(f"[KB WATCHER] Error: {e}")
+
+            time.sleep(interval_sec)
+
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
