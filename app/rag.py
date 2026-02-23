@@ -25,7 +25,9 @@ from typing import Dict, List, Tuple
 from .firebase_kb import init_firebase, fetch_kb_items, fetch_kb_version
 import requests
 from chromadb import PersistentClient
-
+import threading
+import time
+from .firebase_kb import fetch_kb_fingerprint
 from .config import settings
 
 META_DOC_ID = "__kb_meta__"
@@ -197,6 +199,8 @@ def load_kb_to_chroma(service_account_path: str | None = None):
 
     # 1) Firestore'dan ham KB çek
     kb_version = fetch_kb_version()
+    fp_count, fp_max_ut = fetch_kb_fingerprint()
+    kb_version_effective = f"{kb_version}|count={fp_count}|ut={fp_max_ut}"
     kb_items = fetch_kb_items()
 
     if not kb_items:
@@ -223,12 +227,12 @@ def load_kb_to_chroma(service_account_path: str | None = None):
     except Exception:
         chroma_has_docs = False
 
-    if chroma_has_docs and indexed_version == kb_version:
-        print(f"Chroma up-to-date. kbVersion={kb_version}. Skipping doc embedding build.")
+    if chroma_has_docs and indexed_version == kb_version_effective:
+        print(f"Chroma up-to-date. kbVersion={kb_version_effective}. Skipping doc embedding build.")
         return
 
     # 4) Rebuild Chroma (simple + safe)
-    print(f"Rebuilding Chroma. Firestore kbVersion={kb_version}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
+    print(f"Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
 
     try:
         existing = _collection.get(include=[])
@@ -247,7 +251,7 @@ def load_kb_to_chroma(service_account_path: str | None = None):
         embeddings=doc_embeddings
     )
 
-    set_indexed_kb_version(kb_version)
+    set_indexed_kb_version(kb_version_effective)
     print("CHROMA COUNT AFTER LOAD:", _collection.count())
 
 # ---------------- Main RAG ----------------
@@ -347,6 +351,7 @@ from .firebase_kb import fetch_kb_fingerprint
 
 _last_fp = None
 _watcher_started = False
+_reload_lock = threading.Lock()
 
 def start_kb_watcher(interval_sec: int = 600):
     global _watcher_started
@@ -358,18 +363,27 @@ def start_kb_watcher(interval_sec: int = 600):
         global _last_fp
         while True:
             try:
+                # ✅ Firestore çağrısından önce init garanti
+                init_firebase(None)
+
                 fp = fetch_kb_fingerprint()  # (count, max_update_time_iso)
 
-                # ilk kez
                 if _last_fp is None:
                     _last_fp = fp
+                    print(f"[KB WATCHER] init fp={fp}")
                 else:
                     if fp != _last_fp:
-                        print(f"[KB WATCHER] Change detected. old={_last_fp}, new={fp}. Rebuilding...")
-                        load_kb_to_chroma()   # zaten init_firebase içeride
-                        _last_fp = fp
+                        if _reload_lock.acquire(blocking=False):
+                            try:
+                                print(f"[KB WATCHER] Change detected old={_last_fp}, new={fp}. Rebuilding...")
+                                load_kb_to_chroma()  # artık kbVersion_effective ile gerçekten rebuild edecek
+                                _last_fp = fp
+                            finally:
+                                _reload_lock.release()
+                        else:
+                            print("[KB WATCHER] rebuild already running, skip")
                     else:
-                        print(f"[KB WATCHER] No change. fp={fp}")
+                        print(f"[KB WATCHER] No change fp={fp}")
 
             except Exception as e:
                 print(f"[KB WATCHER] Error: {e}")
