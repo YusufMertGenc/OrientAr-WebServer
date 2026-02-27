@@ -346,15 +346,15 @@ def load_kb_to_chroma(service_account_path: str | None = None):
         docs.append(doc_text)
 
         metas.append({
-            "id": doc_id,
-            "title": it.get("title", ""),
-            "section": it.get("section", ""),
-            "url": it.get("url", ""),
-            "lang": it.get("lang", ""),
-            "source": it.get("source", ""),
-            "pageId": it.get("pageId", ""),
-            "chunkIndex": it.get("chunkIndex", None),
-            "chunkCount": it.get("chunkCount", None),
+        "id": str(doc_id),
+        "title": str(it.get("title", "") or ""),
+        "section": str(it.get("section", "") or ""),
+        "url": str(it.get("url", "") or ""),
+        "lang": str(it.get("lang", "") or ""),
+        "source": str(it.get("source", "") or ""),
+        "pageId": str(it.get("pageId", "") or ""),
+        "chunkIndex": int(it.get("chunkIndex", -1) if it.get("chunkIndex", None) is not None else -1),
+        "chunkCount": int(it.get("chunkCount", -1) if it.get("chunkCount", None) is not None else -1),
         })
 
     doc_embeddings = ollama_embed(docs)
