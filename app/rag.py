@@ -1,33 +1,5 @@
 # app/rag.py  ✅ FINAL-PRODUCT: KB-driven RAG with safe embeddings + metadata routing + chunk-first ingestion
 
-"""
-FINAL RAG Module (Production-grade)
-
-Goals:
-- Never crash on startup due to long inputs (Ollama context overflow).
-- Stable embedding behavior: output count == input count always.
-- Metadata-driven topic routing (works great with web-scraped chunked KB).
-- Rebuild Chroma only when KB fingerprint changes.
-- Hybrid retrieval: topic-routing pool + dense search fallback + rerank.
-
-Expected Firestore KB item shape (minimum):
-{
-  "id": "string",
-  "content": "string",
-  "isDeleted": false,
-
-  # optional but strongly recommended for quality:
-  "title": "string",
-  "section": "string",
-  "url": "string",
-  "lang": "en|tr",
-  "source": "metu_web|manual|...",
-  "pageId": "string",
-  "chunkIndex": int,
-  "chunkCount": int,
-}
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -52,19 +24,20 @@ from .firebase_kb import (
 
 META_DOC_ID = "__kb_meta__"
 
-# Char-based guards (token counting is model-specific)
-EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "6000"))          # clamp for embeddings
-EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "2000"))      # retry smaller if Ollama rejects
-TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "320"))   # snippet for topic routing
+EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "6000"))
+EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "2000"))
+TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "320"))
 
-# Retrieval / routing thresholds
 TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "7"))
-TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.33"))  # if best topic sim < threshold -> out-of-domain
+TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.33"))
 
 DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "10"))
 FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))
 
 EMBED_TIMEOUT = int(os.getenv("EMBED_TIMEOUT", "60"))
+
+# Query-time doc clamp (LLM’e yollayacağın context için)
+QUERY_DOC_MAX_CHARS = int(os.getenv("QUERY_DOC_MAX_CHARS", "2500"))
 
 # -------------------- Chroma --------------------
 
@@ -73,16 +46,15 @@ _collection = _chroma_client.get_or_create_collection("campus_kb")
 
 # -------------------- In-memory caches/indexes --------------------
 
-# embedding cache: md5(clamped_text) -> embedding vector
 _EMBED_CACHE: Dict[str, List[float]] = {}
-
-# doc_id -> item dict (includes content + metadata)
 _KB_BY_ID: Dict[str, Dict] = {}
 
-# Topic index arrays (aligned)
 _TOPIC_IDS: List[str] = []
 _TOPIC_TEXTS: List[str] = []
 _TOPIC_EMBS: List[List[float]] = []
+
+# Rebuild guard (watcher rebuild ederken query gelirse patlamasın)
+_REBUILDING = False
 
 
 # -------------------- Utils --------------------
@@ -96,6 +68,12 @@ def _norm_ws(s: str) -> str:
     return s.strip()
 
 def _clamp_for_embed(text: str, max_chars: int = EMBED_MAX_CHARS) -> str:
+    t = _norm_ws(text)
+    if len(t) <= max_chars:
+        return t
+    return t[:max_chars]
+
+def _clamp_for_query(text: str, max_chars: int = QUERY_DOC_MAX_CHARS) -> str:
     t = _norm_ws(text)
     if len(t) <= max_chars:
         return t
@@ -123,7 +101,7 @@ def _url_path_hint(url: str) -> str:
 def _sanitize_meta(meta: Dict) -> Dict:
     """
     Chroma metadata only supports Bool | Int | Float | Str | SparseVector.
-    None is NOT allowed. Also keep only simple types.
+    None is NOT allowed.
     """
     clean: Dict = {}
     for k, v in (meta or {}).items():
@@ -139,10 +117,6 @@ def _sanitize_meta(meta: Dict) -> Dict:
 # -------------------- Embeddings (safe, stable) --------------------
 
 def _ollama_embed_one(prompt: str) -> List[float]:
-    """
-    Single embedding request. Retries with smaller prompt if Ollama rejects.
-    Raises only if both attempts fail.
-    """
     resp = requests.post(
         f"{settings.embedding_base_url}/api/embeddings",
         json={"model": settings.embedding_model, "prompt": prompt},
@@ -155,7 +129,7 @@ def _ollama_embed_one(prompt: str) -> List[float]:
             return emb
         raise RuntimeError(f"Empty embedding from Ollama ({settings.embedding_model})")
 
-    # Retry smaller (especially for context overflow)
+    # Retry smaller (context overflow etc.)
     prompt2 = prompt[:EMBED_RETRY_CHARS]
     resp2 = requests.post(
         f"{settings.embedding_base_url}/api/embeddings",
@@ -172,20 +146,11 @@ def _ollama_embed_one(prompt: str) -> List[float]:
     raise RuntimeError(f"Embedding request failed: {resp.text}")
 
 def ollama_embed(texts: List[str]) -> List[List[float]]:
-    """
-    Production-safe embedding:
-    - ALWAYS returns embeddings with length == len(texts)
-    - clamps input
-    - retries smaller if Ollama rejects context
-    - caches by md5(clamped_text)
-    """
     out: List[List[float]] = []
 
     for raw in texts:
-        # normalize + clamp first
         t = _clamp_for_embed(raw)
 
-        # ensure alignment: even empty => embed "empty"
         if not t:
             t = "empty"
 
@@ -204,9 +169,6 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
 # -------------------- Topic text builder --------------------
 
 def _topic_text_from_item(item: Dict) -> str:
-    """
-    Build routing text using metadata + URL hint + a short snippet.
-    """
     doc_id = _norm_ws(item.get("id", ""))
     title = _norm_ws(item.get("title", ""))
     section = _norm_ws(item.get("section", ""))
@@ -265,127 +227,113 @@ def set_indexed_kb_version(kb_version: str):
 # -------------------- Load KB & Build Indexes --------------------
 
 def load_kb_to_chroma(service_account_path: str | None = None):
-    """
-    Startup load:
-    - init firebase
-    - fetch KB
-    - build topic embeddings for routing
-    - rebuild Chroma only if fingerprint changed
-    """
-    global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS
+    global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS, _REBUILDING
 
-    # 0) Firebase init
-    init_firebase(service_account_path)
-
-    # 1) Fingerprint/version
-    kb_version = fetch_kb_version()
-    fp_count, fp_max_ut = fetch_kb_fingerprint()
-    kb_version_effective = f"{kb_version}|count={fp_count}|ut={fp_max_ut}"
-
-    kb_items = fetch_kb_items()
-    if not kb_items:
-        raise RuntimeError("Firestore KB is empty (chatbot_kb_items).")
-
-    # 2) Filter deleted & normalize
-    normalized: List[Dict] = []
-    for it in kb_items:
-        if it.get("isDeleted") is True:
-            continue
-        doc_id = it.get("id")
-        content = it.get("content", "")
-        if not doc_id or not (content and str(content).strip()):
-            continue
-        normalized.append(it)
-
-    if not normalized:
-        raise RuntimeError("Firestore KB has no active (non-deleted) items.")
-
-    # 3) In-memory KB map
-    _KB_BY_ID = {it["id"]: it for it in normalized}
-
-    # 4) Topic routing index (aligned arrays)
-    _TOPIC_IDS = [it["id"] for it in normalized]
-    _TOPIC_TEXTS = [_topic_text_from_item(it) for it in normalized]
-    _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
-
-    # 5) Chroma up-to-date?
-    indexed_version = get_indexed_kb_version()
+    _REBUILDING = True
     try:
-        chroma_has_docs = _collection.count() > 0
-    except Exception:
-        chroma_has_docs = False
+        init_firebase(service_account_path)
 
-    if chroma_has_docs and indexed_version == kb_version_effective:
-        print(f"[RAG] Chroma up-to-date. kbVersion={kb_version_effective}. Skipping doc embedding build.")
-        return
+        kb_version = fetch_kb_version()
+        fp_count, fp_max_ut = fetch_kb_fingerprint()
+        kb_version_effective = f"{kb_version}|count={fp_count}|ut={fp_max_ut}"
 
-    print(f"[RAG] Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
+        kb_items = fetch_kb_items()
+        if not kb_items:
+            raise RuntimeError("Firestore KB is empty (chatbot_kb_items).")
 
-    # 6) Clear existing docs except META
-    try:
-        existing = _collection.get(include=[])
-        if existing.get("ids"):
-            ids_to_delete = [i for i in existing["ids"] if i != META_DOC_ID]
-            if ids_to_delete:
-                _collection.delete(ids=ids_to_delete)
-    except Exception:
-        pass
+        normalized: List[Dict] = []
+        for it in kb_items:
+            if it.get("isDeleted") is True:
+                continue
+            doc_id = it.get("id")
+            content = it.get("content", "")
+            if not doc_id or not (content and str(content).strip()):
+                continue
+            normalized.append(it)
 
-    # 7) Prepare docs/metas (SANITIZED)
-    ids: List[str] = []
-    docs: List[str] = []
-    metas: List[Dict] = []
+        if not normalized:
+            raise RuntimeError("Firestore KB has no active (non-deleted) items.")
 
-    for it in normalized:
-        doc_id = str(it.get("id", "")).strip()
-        if not doc_id:
-            continue
+        _KB_BY_ID = {it["id"]: it for it in normalized}
 
-        content = str(it.get("content", "") or "")
-        doc_text = _clamp_for_embed(content, max_chars=EMBED_MAX_CHARS)
+        _TOPIC_IDS = [it["id"] for it in normalized]
+        _TOPIC_TEXTS = [_topic_text_from_item(it) for it in normalized]
+        _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
 
-        # If empty after normalize, skip
-        if not doc_text:
-            continue
+        indexed_version = get_indexed_kb_version()
+        try:
+            chroma_has_docs = _collection.count() > 0
+        except Exception:
+            chroma_has_docs = False
 
-        raw_meta = {
-            "id": doc_id,
-            "title": str(it.get("title", "") or ""),
-            "section": str(it.get("section", "") or ""),
-            "url": str(it.get("url", "") or ""),
-            "lang": str(it.get("lang", "") or ""),
-            "source": str(it.get("source", "") or ""),
-            "pageId": str(it.get("pageId", "") or ""),
-            # keep ints safe (no None)
-            "chunkIndex": int(it.get("chunkIndex", -1) if it.get("chunkIndex", None) is not None else -1),
-            "chunkCount": int(it.get("chunkCount", -1) if it.get("chunkCount", None) is not None else -1),
-        }
+        if chroma_has_docs and indexed_version == kb_version_effective:
+            print(f"[RAG] Chroma up-to-date. kbVersion={kb_version_effective}. Skipping doc embedding build.")
+            return
 
-        ids.append(doc_id)
-        docs.append(doc_text)
-        metas.append(_sanitize_meta(raw_meta))  # ✅ CRITICAL FIX
+        print(f"[RAG] Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
 
-    if not ids:
-        raise RuntimeError("[RAG] No valid docs to index after normalization.")
+        # Clear docs except META
+        try:
+            existing = _collection.get(include=[])
+            if existing.get("ids"):
+                ids_to_delete = [i for i in existing["ids"] if i != META_DOC_ID]
+                if ids_to_delete:
+                    _collection.delete(ids=ids_to_delete)
+        except Exception:
+            pass
 
-    # 8) Embed & add
-    doc_embeddings = ollama_embed(docs)
+        ids: List[str] = []
+        docs: List[str] = []
+        metas: List[Dict] = []
 
-    # hard assert alignment
-    if not (len(ids) == len(docs) == len(metas) == len(doc_embeddings)):
-        raise RuntimeError(
-            f"[RAG] Alignment mismatch ids={len(ids)} docs={len(docs)} metas={len(metas)} embs={len(doc_embeddings)}"
+        for it in normalized:
+            doc_id = str(it.get("id", "")).strip()
+            if not doc_id:
+                continue
+
+            content = str(it.get("content", "") or "")
+            doc_text = _clamp_for_embed(content, max_chars=EMBED_MAX_CHARS)
+            if not doc_text:
+                continue
+
+            raw_meta = {
+                "id": doc_id,
+                "title": str(it.get("title", "") or ""),
+                "section": str(it.get("section", "") or ""),
+                "url": str(it.get("url", "") or ""),
+                "lang": str(it.get("lang", "") or ""),
+                "source": str(it.get("source", "") or ""),
+                "pageId": str(it.get("pageId", "") or ""),
+                "chunkIndex": int(it.get("chunkIndex", -1) if it.get("chunkIndex", None) is not None else -1),
+                "chunkCount": int(it.get("chunkCount", -1) if it.get("chunkCount", None) is not None else -1),
+            }
+
+            ids.append(doc_id)
+            docs.append(doc_text)
+            metas.append(_sanitize_meta(raw_meta))
+
+        if not ids:
+            raise RuntimeError("[RAG] No valid docs to index after normalization.")
+
+        doc_embeddings = ollama_embed(docs)
+
+        if not (len(ids) == len(docs) == len(metas) == len(doc_embeddings)):
+            raise RuntimeError(
+                f"[RAG] Alignment mismatch ids={len(ids)} docs={len(docs)} metas={len(metas)} embs={len(doc_embeddings)}"
+            )
+
+        _collection.add(
+            ids=ids,
+            documents=docs,
+            metadatas=metas,
+            embeddings=doc_embeddings,
         )
 
-    _collection.add(
-        ids=ids,
-        documents=docs,
-        metadatas=metas,
-        embeddings=doc_embeddings,
-    )
+        set_indexed_kb_version(kb_version_effective)
+        print("[RAG] CHROMA COUNT AFTER LOAD:", _collection.count())
 
-    set_indexed_kb_version(kb_version_effective)
-    print("[RAG] CHROMA COUNT AFTER LOAD:", _collection.count())
+    finally:
+        _REBUILDING = False
 
 
 # -------------------- Topic routing --------------------
@@ -412,9 +360,6 @@ def _lexical_overlap(query: str, doc: str) -> float:
     return len(q_words & d_words) / max(len(q_words), 1)
 
 def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[str]:
-    """
-    candidates: list of (doc_text, semantic_score_hint)
-    """
     scored: List[Tuple[float, str]] = []
     for doc_text, sem in candidates:
         lex = _lexical_overlap(query, doc_text)
@@ -428,13 +373,10 @@ def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[st
 # -------------------- Main RAG --------------------
 
 def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
-    """
-    End-to-end RAG:
-    1) Embed question
-    2) Topic routing
-    3) Routed docs + dense fallback
-    4) Hybrid rerank
-    """
+    # watcher rebuild ederken query gelirse: boş dön (500 olmasın)
+    if _REBUILDING:
+        return {"documents": [], "domain_score": 0.0}
+
     q = question or ""
     q_emb = ollama_embed([q])[0]
 
@@ -455,12 +397,12 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
         if not it:
             continue
         doc = it.get("content", "") or ""
-        doc = _clamp_for_embed(doc, max_chars=8000)  # allow a bit longer for answer context
+        doc = _clamp_for_query(doc, max_chars=QUERY_DOC_MAX_CHARS)
         if doc and doc not in seen:
             seen.add(doc)
             candidates.append((doc, 0.85))
 
-    # Dense fallback from Chroma
+    # Dense fallback
     try:
         res = _collection.query(
             query_embeddings=[q_emb],
@@ -472,9 +414,12 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
         for doc, dist in zip(docs, dists):
             if not doc or doc in seen:
                 continue
-            seen.add(doc)
+            doc2 = _clamp_for_query(doc, max_chars=QUERY_DOC_MAX_CHARS)
+            if not doc2:
+                continue
+            seen.add(doc2)
             sem_sim = 1.0 / (1.0 + float(dist))
-            candidates.append((doc, sem_sim))
+            candidates.append((doc2, sem_sim))
     except Exception as e:
         print(f"[RAG] Dense query failed: {e}")
 
@@ -485,18 +430,13 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     return {"documents": best_docs, "domain_score": max_topic_score}
 
 
-# -------------------- KB Watcher (optional) --------------------
+# -------------------- KB Watcher --------------------
 
 _last_fp = None
 _watcher_started = False
 _reload_lock = None
 
 def start_kb_watcher(interval_sec: int = 600):
-    """
-    Optional background watcher:
-    - checks Firestore fingerprint
-    - rebuilds Chroma if changed
-    """
     global _watcher_started, _last_fp, _reload_lock
     if _watcher_started:
         return

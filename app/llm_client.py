@@ -1,19 +1,11 @@
-"""
-LLM Client
-
-Responsible for generating the final answer using the selected RAG context.
-Builds a constrained prompt, sends it to the LLM, and parses a JSON-only response.
-
-Key points:
-- Uses a strict system prompt to avoid hallucination
-- Limits context size for performance
-- Expects a structured JSON output (message + confidence)
-"""
+# app/llm_client.py  ✅ FINAL
 
 import json
-import requests
-from typing import List
+import re
+import time
+from typing import List, Dict
 
+import requests
 from .config import settings
 
 
@@ -21,59 +13,62 @@ INTENT_SYSTEM_PROMPT = """
 You are OrientAR, an assistant for a campus application.
 Assume all questions are about METU NCC unless stated otherwise.
 
-You may combine and reason over multiple pieces of the provided context
-to produce a clear and helpful answer.
-You MUST NOT use any knowledge that is not present in the context.
+You MUST use ONLY the provided context.
+You MUST NOT use any external knowledge.
 
-If the question is related to "How to" or "Help me",
-provide step-by-step instructions ONLY if the context EXPLICITLY describes the steps.
-If the context does not contain procedural steps, say you do not know.
+CRITICAL RULES:
+- Always finish sentences. Never stop mid-sentence.
+- If context contains a list (e.g. dormitories), list ALL items mentioned.
+- Do not hallucinate new items.
 
-Rules:
-- Use ONLY the provided context.
-- If the answer cannot be derived from the context, say you do not know.
-- Do NOT make assumptions or add external information.
-- Respond ONLY with valid JSON.
-- The value of "message" MUST be plain text.
-- DO NOT put JSON, lists, or objects inside the "message" field.
+Output:
+- Respond ONLY with valid JSON (no markdown, no extra text).
+- "message" must be plain text.
+- JSON format:
+  {"message": "...", "confidence": 0.xx}
+""".strip()
 
-JSON FORMAT:
-{
-  "message": "<answer>",
-  "confidence": <number between 0 and 1>
-}
-
-"""
 
 def _clean_json_string(text: str) -> str:
-    """Markdown taglerini temizler ve sadece { } arasındaki JSON'ı alır."""
-    text = text.strip()
+    text = (text or "").strip()
+
+    # remove fenced blocks if any
     if text.startswith("```json"):
         text = text[7:]
     elif text.startswith("```"):
         text = text[3:]
     if text.endswith("```"):
         text = text[:-3]
-    
-    # İlk { ve son } bularak aradaki temiz JSON'ı al
+
+    text = text.strip()
+
+    # extract first {...} block
     start = text.find("{")
     end = text.rfind("}")
-    if start != -1 and end != -1:
-        return text[start:end+1]
-    return text.strip()
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+    return text
+
 
 def build_intent_prompt(question: str, context_passages: List[str]) -> str:
-    # hard limit context size for speed
-    trimmed = []
+    # Passage-based trimming (daha stabil)
+    trimmed: List[str] = []
     total_chars = 0
+    LIMIT = 3500  # context limit
 
-    for p in context_passages:
-        if total_chars > 1500:
+    for p in context_passages or []:
+        if not p:
+            continue
+        pp = p.strip()
+        # each passage clamp
+        if len(pp) > 1800:
+            pp = pp[:1800]
+        if total_chars + len(pp) > LIMIT:
             break
-        trimmed.append(p)
-        total_chars += len(p)
+        trimmed.append(pp)
+        total_chars += len(pp)
 
-    context_text = "\n\n".join(trimmed) if trimmed else "No relevant campus info found."
+    context_text = "\n\n".join([f"[DOC {i+1}]\n{t}" for i, t in enumerate(trimmed)]) if trimmed else "No relevant campus info found."
 
     return f"""
 CONTEXT:
@@ -81,61 +76,80 @@ CONTEXT:
 
 QUESTION:
 {question}
+
+Remember:
+- Use only context
+- Finish sentences
+- Output ONLY JSON
 """.strip()
 
 
-import json
+def _safe_fallback(raw: str) -> Dict:
+    raw = (raw or "").strip()
 
-import re  # <--- Bunu en tepeye ekle
+    # try to pull message if model produced something close to JSON
+    m = re.search(r'"message"\s*:\s*"([^"]+)"', raw, re.DOTALL)
+    if m:
+        msg = m.group(1).strip()
+        return {"message": msg, "confidence": 0.45}
 
-# generate_intent_response fonksiyonunu komple bununla değiştir:
-def generate_intent_response(question: str, context_passages: List[str]) -> dict:
+    # else: just return cleaned text
+    msg = re.sub(r"\s+", " ", raw)
+    if len(msg) > 600:
+        msg = msg[:600] + "..."
+    if not msg:
+        msg = "I’m not sure based on the available information."
+    return {"message": msg, "confidence": 0.35}
+
+
+def generate_intent_response(question: str, context_passages: List[str]) -> Dict:
     payload = {
         "model": settings.llm_model,
         "messages": [
             {"role": "system", "content": INTENT_SYSTEM_PROMPT},
-            {"role": "user", "content": build_intent_prompt(question, context_passages)}
+            {"role": "user", "content": build_intent_prompt(question, context_passages)},
         ],
         "temperature": 0.2,
         "options": {
-            "num_ctx": 1024,
-            "num_predict": 64 
+            "num_ctx": 2048,      # 1024 küçük kalabiliyor
+            "num_predict": 256,   # 64 çok kısa → yarım cümle yapar
         },
-        "stream": False
+        "stream": False,
     }
 
-    try:
-        resp = requests.post(
-            f"{settings.llm_base_url}/api/chat",
-            json=payload,
-            timeout=120
-        )
-        resp.raise_for_status()
-        raw = resp.json()["message"]["content"]
+    last_err = None
 
-        # Önce temizlemeyi dene
-        cleaned = _clean_json_string(raw)
-        return json.loads(cleaned)
+    for attempt in range(3):  # retry
+        try:
+            resp = requests.post(
+                f"{settings.llm_base_url}/api/chat",
+                json=payload,
+                timeout=180,
+            )
+            resp.raise_for_status()
 
-    except (json.JSONDecodeError, ValueError):
-        # 🔥 BURASI ÖNEMLİ: JSON patladıysa ham metni basma!
-        # Regex ile sadece "message"ın karşısındaki yazıyı al.
-        
-        # 1. Regex ile çekmeye çalış (en temiz yöntem)
-        match = re.search(r'(?:"?message"?\s*:\s*"?)(.*?)(?:["}]|$)', raw, re.DOTALL)
-        
-        if match:
-            text = match.group(1).strip()
-            # Eğer kesildiği için sonda tırnak (") kaldıysa sil
-            if text.endswith('"'): text = text[:-1]
-            return {"message": text, "confidence": 0.5}
+            raw = resp.json()["message"]["content"]
+            cleaned = _clean_json_string(raw)
 
-        # 2. Regex de bulamazsa manuel temizlik (Brute force)
-        text = raw.replace('{"message":', '').replace('message:', '').replace('{', '').replace('}', '').strip()
-        if text.startswith('"'): text = text[1:]
-        if text.endswith('"'): text = text[:-1]
-        
-        return {
-            "message": text,
-            "confidence": 0.5
-        }
+            try:
+                obj = json.loads(cleaned)
+                # guarantee keys
+                msg = str(obj.get("message", "")).strip()
+                conf = obj.get("confidence", 0.5)
+                try:
+                    conf = float(conf)
+                except Exception:
+                    conf = 0.5
+                if not msg:
+                    return {"message": "I’m not sure based on the available information.", "confidence": 0.25}
+                return {"message": msg, "confidence": max(0.0, min(1.0, conf))}
+            except Exception:
+                # JSON parse patladı
+                return _safe_fallback(raw)
+
+        except Exception as e:
+            last_err = e
+            time.sleep(0.6 * (attempt + 1))
+
+    # all failed
+    return {"message": "Temporary error while answering. Please retry.", "confidence": 0.2, "error": str(last_err)}
