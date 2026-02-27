@@ -15,7 +15,7 @@ Expected Firestore KB item shape (minimum):
   "id": "string",
   "content": "string",
   "isDeleted": false,
-  "updatedAt": 1234567890,
+
   # optional but strongly recommended for quality:
   "title": "string",
   "section": "string",
@@ -25,7 +25,6 @@ Expected Firestore KB item shape (minimum):
   "pageId": "string",
   "chunkIndex": int,
   "chunkCount": int,
-  "contentHash": "sha1",
 }
 """
 
@@ -53,11 +52,10 @@ from .firebase_kb import (
 
 META_DOC_ID = "__kb_meta__"
 
-# These are character-based guards (token counting is expensive & model-specific)
-EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "6000"))          # clamp for embeddings (safe)
+# Char-based guards (token counting is model-specific)
+EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "6000"))          # clamp for embeddings
 EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "2000"))      # retry smaller if Ollama rejects
-TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "320"))   # snippet used for topic routing
-DOC_DISPLAY_SNIPPET = int(os.getenv("DOC_DISPLAY_SNIPPET", "260"))   # for debug/log display only
+TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "320"))   # snippet for topic routing
 
 # Retrieval / routing thresholds
 TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "7"))
@@ -66,8 +64,6 @@ TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.33"))  # if best t
 DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "10"))
 FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))
 
-# Embedding batching (Ollama endpoint called per-text in this implementation;
-# but we still control concurrency / timeouts here)
 EMBED_TIMEOUT = int(os.getenv("EMBED_TIMEOUT", "60"))
 
 # -------------------- Chroma --------------------
@@ -80,17 +76,16 @@ _collection = _chroma_client.get_or_create_collection("campus_kb")
 # embedding cache: md5(clamped_text) -> embedding vector
 _EMBED_CACHE: Dict[str, List[float]] = {}
 
-# Raw KB cache
-# doc_id -> dict with fields content, title, section, url, lang, source, pageId, chunkIndex...
+# doc_id -> item dict (includes content + metadata)
 _KB_BY_ID: Dict[str, Dict] = {}
 
-# Topic index (same length arrays, always aligned)
+# Topic index arrays (aligned)
 _TOPIC_IDS: List[str] = []
 _TOPIC_TEXTS: List[str] = []
 _TOPIC_EMBS: List[List[float]] = []
 
 
-# -------------------- Utilities --------------------
+# -------------------- Utils --------------------
 
 def _md5(s: str) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()
@@ -101,15 +96,10 @@ def _norm_ws(s: str) -> str:
     return s.strip()
 
 def _clamp_for_embed(text: str, max_chars: int = EMBED_MAX_CHARS) -> str:
-    """Clamp and normalize text safely for embedding requests."""
     t = _norm_ws(text)
     if len(t) <= max_chars:
         return t
     return t[:max_chars]
-
-def _safe_print_snip(s: str, n: int = DOC_DISPLAY_SNIPPET) -> str:
-    s = _norm_ws(s)
-    return s[:n] + ("..." if len(s) > n else "")
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
@@ -122,21 +112,37 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
 def _url_path_hint(url: str) -> str:
     if not url:
         return ""
-    # keep only path-ish hints (avoid full noisy URL)
-    # example: https://ncc.metu.edu.tr/library/working-hours -> "library / working hours"
     try:
         from urllib.parse import urlparse
         p = urlparse(url).path.strip("/")
         p = p.replace("-", " ").replace("/", " / ")
-        return p
+        return _norm_ws(p)
     except Exception:
         return ""
+
+def _sanitize_meta(meta: Dict) -> Dict:
+    """
+    Chroma metadata only supports Bool | Int | Float | Str | SparseVector.
+    None is NOT allowed. Also keep only simple types.
+    """
+    clean: Dict = {}
+    for k, v in (meta or {}).items():
+        if v is None:
+            continue
+        if isinstance(v, (str, int, float, bool)):
+            clean[k] = v
+        else:
+            clean[k] = str(v)
+    return clean
 
 
 # -------------------- Embeddings (safe, stable) --------------------
 
 def _ollama_embed_one(prompt: str) -> List[float]:
-    """Single embedding request. Raises only if both attempts fail."""
+    """
+    Single embedding request. Retries with smaller prompt if Ollama rejects.
+    Raises only if both attempts fail.
+    """
     resp = requests.post(
         f"{settings.embedding_base_url}/api/embeddings",
         json={"model": settings.embedding_model, "prompt": prompt},
@@ -149,7 +155,7 @@ def _ollama_embed_one(prompt: str) -> List[float]:
             return emb
         raise RuntimeError(f"Empty embedding from Ollama ({settings.embedding_model})")
 
-    # Retry smaller on context overflow / bad request
+    # Retry smaller (especially for context overflow)
     prompt2 = prompt[:EMBED_RETRY_CHARS]
     resp2 = requests.post(
         f"{settings.embedding_base_url}/api/embeddings",
@@ -163,7 +169,6 @@ def _ollama_embed_one(prompt: str) -> List[float]:
             return emb2
         raise RuntimeError(f"Empty embedding (retry) from Ollama ({settings.embedding_model})")
 
-    # Both failed: raise with the original error
     raise RuntimeError(f"Embedding request failed: {resp.text}")
 
 def ollama_embed(texts: List[str]) -> List[List[float]]:
@@ -175,19 +180,19 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
     - caches by md5(clamped_text)
     """
     out: List[List[float]] = []
+
     for raw in texts:
-        # Ensure stable output even on empty strings
+        # normalize + clamp first
         t = _clamp_for_embed(raw)
 
-        # Cache key after clamp
+        # ensure alignment: even empty => embed "empty"
+        if not t:
+            t = "empty"
+
         key = _md5(t)
         if key in _EMBED_CACHE:
             out.append(_EMBED_CACHE[key])
             continue
-
-        # If text is empty, embed a fixed token to keep alignment stable
-        if not t:
-            t = "empty"
 
         emb = _ollama_embed_one(t)
         _EMBED_CACHE[key] = emb
@@ -196,30 +201,26 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
     return out
 
 
-# -------------------- KB -> Topic text --------------------
+# -------------------- Topic text builder --------------------
 
 def _topic_text_from_item(item: Dict) -> str:
     """
-    Build a routing/topic text from metadata + snippet.
-    This is the biggest quality lift for web-scraped KB.
+    Build routing text using metadata + URL hint + a short snippet.
     """
+    doc_id = _norm_ws(item.get("id", ""))
     title = _norm_ws(item.get("title", ""))
     section = _norm_ws(item.get("section", ""))
     lang = _norm_ws(item.get("lang", ""))
     url = _norm_ws(item.get("url", ""))
     source = _norm_ws(item.get("source", ""))
 
-    # content already contains your helpful header sometimes; still OK:
     content = item.get("content", "") or ""
     snippet = _norm_ws(content)[:TOPIC_SNIPPET_CHARS]
 
     url_hint = _url_path_hint(url)
-
-    # If metadata is missing, fall back to doc_id words
-    doc_id = item.get("id", "")
     id_hint = _norm_ws(doc_id.replace("_", " ").replace("__", " "))
 
-    parts = []
+    parts: List[str] = []
     if title:
         parts.append(title)
     if section:
@@ -232,9 +233,10 @@ def _topic_text_from_item(item: Dict) -> str:
         parts.append(f"src:{source}")
     if not parts and id_hint:
         parts.append(id_hint)
+    if not parts:
+        parts.append("kb item")
 
-    # Final topic text includes snippet for extra semantic anchoring
-    base = ". ".join(parts) if parts else "kb item"
+    base = ". ".join(parts)
     topic = f"{base}. {snippet}"
     return _clamp_for_embed(topic, max_chars=EMBED_MAX_CHARS)
 
@@ -291,17 +293,17 @@ def load_kb_to_chroma(service_account_path: str | None = None):
             continue
         doc_id = it.get("id")
         content = it.get("content", "")
-        if not doc_id or not content:
+        if not doc_id or not (content and str(content).strip()):
             continue
         normalized.append(it)
 
     if not normalized:
         raise RuntimeError("Firestore KB has no active (non-deleted) items.")
 
-    # 3) Build in-memory KB map
+    # 3) In-memory KB map
     _KB_BY_ID = {it["id"]: it for it in normalized}
 
-    # 4) Topic index (aligned arrays)
+    # 4) Topic routing index (aligned arrays)
     _TOPIC_IDS = [it["id"] for it in normalized]
     _TOPIC_TEXTS = [_topic_text_from_item(it) for it in normalized]
     _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
@@ -319,45 +321,61 @@ def load_kb_to_chroma(service_account_path: str | None = None):
 
     print(f"[RAG] Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
 
-    # 6) Clear existing docs (except meta, easiest: delete all ids)
+    # 6) Clear existing docs except META
     try:
         existing = _collection.get(include=[])
         if existing.get("ids"):
-            # remove meta if present in ids list
             ids_to_delete = [i for i in existing["ids"] if i != META_DOC_ID]
             if ids_to_delete:
                 _collection.delete(ids=ids_to_delete)
     except Exception:
         pass
 
-    # 7) Prepare docs for Chroma (clamped content for stable embeddings)
+    # 7) Prepare docs/metas (SANITIZED)
     ids: List[str] = []
     docs: List[str] = []
     metas: List[Dict] = []
 
     for it in normalized:
-        doc_id = it["id"]
-        content = it.get("content", "") or ""
+        doc_id = str(it.get("id", "")).strip()
+        if not doc_id:
+            continue
 
-        # For dense retrieval embeddings, clamp content (chunk-first KB already ideal)
+        content = str(it.get("content", "") or "")
         doc_text = _clamp_for_embed(content, max_chars=EMBED_MAX_CHARS)
+
+        # If empty after normalize, skip
+        if not doc_text:
+            continue
+
+        raw_meta = {
+            "id": doc_id,
+            "title": str(it.get("title", "") or ""),
+            "section": str(it.get("section", "") or ""),
+            "url": str(it.get("url", "") or ""),
+            "lang": str(it.get("lang", "") or ""),
+            "source": str(it.get("source", "") or ""),
+            "pageId": str(it.get("pageId", "") or ""),
+            # keep ints safe (no None)
+            "chunkIndex": int(it.get("chunkIndex", -1) if it.get("chunkIndex", None) is not None else -1),
+            "chunkCount": int(it.get("chunkCount", -1) if it.get("chunkCount", None) is not None else -1),
+        }
 
         ids.append(doc_id)
         docs.append(doc_text)
+        metas.append(_sanitize_meta(raw_meta))  # ✅ CRITICAL FIX
 
-        metas.append({
-        "id": str(doc_id),
-        "title": str(it.get("title", "") or ""),
-        "section": str(it.get("section", "") or ""),
-        "url": str(it.get("url", "") or ""),
-        "lang": str(it.get("lang", "") or ""),
-        "source": str(it.get("source", "") or ""),
-        "pageId": str(it.get("pageId", "") or ""),
-        "chunkIndex": int(it.get("chunkIndex", -1) if it.get("chunkIndex", None) is not None else -1),
-        "chunkCount": int(it.get("chunkCount", -1) if it.get("chunkCount", None) is not None else -1),
-        })
+    if not ids:
+        raise RuntimeError("[RAG] No valid docs to index after normalization.")
 
+    # 8) Embed & add
     doc_embeddings = ollama_embed(docs)
+
+    # hard assert alignment
+    if not (len(ids) == len(docs) == len(metas) == len(doc_embeddings)):
+        raise RuntimeError(
+            f"[RAG] Alignment mismatch ids={len(ids)} docs={len(docs)} metas={len(metas)} embs={len(doc_embeddings)}"
+        )
 
     _collection.add(
         ids=ids,
@@ -377,16 +395,14 @@ def top_topics(q_emb: List[float], top_n: int = TOPIC_TOP_N) -> List[Tuple[str, 
         return []
 
     scored: List[Tuple[str, float]] = []
-    # arrays are aligned by design
     for topic_id, t_emb in zip(_TOPIC_IDS, _TOPIC_EMBS):
-        sim = cosine_similarity(q_emb, t_emb)
-        scored.append((topic_id, sim))
+        scored.append((topic_id, cosine_similarity(q_emb, t_emb)))
 
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:top_n]
 
 
-# -------------------- Reranking (hybrid) --------------------
+# -------------------- Reranking --------------------
 
 def _lexical_overlap(query: str, doc: str) -> float:
     q_words = set(_norm_ws(query).lower().split())
@@ -398,14 +414,10 @@ def _lexical_overlap(query: str, doc: str) -> float:
 def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[str]:
     """
     candidates: list of (doc_text, semantic_score_hint)
-    semantic_score_hint:
-      - for routed docs: constant boost baseline
-      - for dense docs: similarity derived from chroma distance
     """
     scored: List[Tuple[float, str]] = []
     for doc_text, sem in candidates:
         lex = _lexical_overlap(query, doc_text)
-        # Hybrid score: emphasize semantic, use lexical as tie-breaker
         score = (0.75 * sem) + (0.25 * lex)
         scored.append((score, doc_text))
 
@@ -419,8 +431,8 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     """
     End-to-end RAG:
     1) Embed question
-    2) Topic routing: pick top topics (high precision pool)
-    3) Dense fallback: Chroma query
+    2) Topic routing
+    3) Routed docs + dense fallback
     4) Hybrid rerank
     """
     q = question or ""
@@ -429,28 +441,26 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     routed = top_topics(q_emb, top_n=5)
     max_topic_score = max((s for _, s in routed), default=0.0)
 
-    # Domain guard: if question doesn't match KB topics, return empty
     if max_topic_score < TOPIC_DOMAIN_GUARD:
         return {"documents": [], "domain_score": max_topic_score}
 
     routed_ids = [tid for tid, _ in routed]
 
-    # Candidate pool
     candidates: List[Tuple[str, float]] = []
     seen = set()
 
-    # 3a) Routed docs (boost)
+    # Routed docs (boost)
     for doc_id in routed_ids:
         it = _KB_BY_ID.get(doc_id)
         if not it:
             continue
-        doc = it.get("content", "")
-        doc = _clamp_for_embed(doc, max_chars=8000)  # allow slightly longer for answer context
+        doc = it.get("content", "") or ""
+        doc = _clamp_for_embed(doc, max_chars=8000)  # allow a bit longer for answer context
         if doc and doc not in seen:
             seen.add(doc)
-            candidates.append((doc, 0.85))  # routed boost
+            candidates.append((doc, 0.85))
 
-    # 3b) Dense fallback from Chroma
+    # Dense fallback from Chroma
     try:
         res = _collection.query(
             query_embeddings=[q_emb],
@@ -463,10 +473,9 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
             if not doc or doc in seen:
                 continue
             seen.add(doc)
-            sem_sim = 1.0 / (1.0 + float(dist))  # distance -> similarity
+            sem_sim = 1.0 / (1.0 + float(dist))
             candidates.append((doc, sem_sim))
     except Exception as e:
-        # don't crash queries
         print(f"[RAG] Dense query failed: {e}")
 
     if not candidates:
@@ -484,7 +493,7 @@ _reload_lock = None
 
 def start_kb_watcher(interval_sec: int = 600):
     """
-    Optional background watcher thread:
+    Optional background watcher:
     - checks Firestore fingerprint
     - rebuilds Chroma if changed
     """
