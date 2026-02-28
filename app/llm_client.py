@@ -112,7 +112,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
         "temperature": 0.2,
         "options": {
             "num_ctx": 2048,      # 1024 küçük kalabiliyor
-            "num_predict": 256,   # 64 çok kısa → yarım cümle yapar
+            "num_predict": 96,   # 64 çok kısa → yarım cümle yapar
         },
         "stream": False,
     }
