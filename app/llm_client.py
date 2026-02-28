@@ -117,22 +117,34 @@ def _normalize_llm_obj(obj) -> Dict:
         conf = 0.5
     conf = max(0.0, min(1.0, conf))
 
-    # 🔥 double-JSON fix: message is itself a JSON string
-    if isinstance(msg, str):
-        s = msg.strip()
-        if s.startswith("{") and s.endswith("}"):
-            try:
-                inner = json.loads(s)
-                if isinstance(inner, dict) and "message" in inner:
-                    return _normalize_llm_obj(inner)
-            except Exception:
-                pass
-
     if not isinstance(msg, str):
         msg = str(msg)
 
-    return {"message": msg.strip(), "confidence": conf}
+    s = msg.strip()
 
+    # ✅ 1) Eğer message içi JSON string'i gibi görünüyorsa (tam olmasa bile) JSON bloğunu ayıkla
+    # ör: "{\"message\": \"...\", \"confidence\": 0.6"  -> içte { ... } parçasını çek
+    inner_candidate = _clean_json_string(s)
+
+    # ✅ 2) inner JSON parse dene
+    if inner_candidate and inner_candidate.startswith("{"):
+        try:
+            inner = json.loads(inner_candidate)
+            if isinstance(inner, dict) and "message" in inner:
+                return _normalize_llm_obj(inner)  # recursion
+        except Exception:
+            pass
+
+    # ✅ 3) Parse olmadıysa regex ile iç message'ı çek (kırpılmış olsa bile)
+    m = re.search(r'"message"\s*:\s*"(.+?)"\s*(?:,|})', s, re.DOTALL)
+    if m:
+        extracted = m.group(1).strip()
+        # escaped quotes temizle
+        extracted = extracted.replace('\\"', '"')
+        return {"message": extracted, "confidence": conf}
+
+    # ✅ 4) En son: düz metin gibi döndür
+    return {"message": s, "confidence": conf}
 
 def generate_intent_response(question: str, context_passages: List[str]) -> Dict:
     payload = {
