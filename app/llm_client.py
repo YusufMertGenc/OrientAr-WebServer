@@ -1,9 +1,9 @@
-# app/llm_client.py  ✅ FINAL (robust JSON + double-JSON fix + retries)
+# app/llm_client.py  ✅ FINAL (robust JSON + double-JSON + "message:" prefix killer + retries)
 
 import json
 import re
 import time
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import requests
 from .config import settings
@@ -29,6 +29,27 @@ Output:
 """.strip()
 
 
+# -------------------- helpers --------------------
+
+# message: / "message": / Message= ... prefix siler (tekrar tekrar olsa bile)
+_RE_LEADING_MESSAGE_PREFIX = re.compile(
+    r'^\s*(?:["\']?\s*message\s*["\']?\s*[:=]\s*)+',
+    re.IGNORECASE
+)
+
+# iç içe JSON string içinden "message":"..." yakalar (escape'li de olsa)
+_RE_INNER_JSON_MESSAGE = re.compile(
+    r'"message"\s*:\s*"(?P<msg>(?:\\.|[^"\\])*)"',
+    re.DOTALL
+)
+
+# near-json içinden message yakalama (kırpılmış JSON durumları için)
+_RE_NEAR_JSON_MESSAGE = re.compile(
+    r'"message"\s*:\s*"(?P<msg>.+?)"\s*(?:,|}|$)',
+    re.DOTALL
+)
+
+
 def _clean_json_string(text: str) -> str:
     text = (text or "").strip()
 
@@ -46,7 +67,7 @@ def _clean_json_string(text: str) -> str:
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+        return text[start: end + 1]
     return text
 
 
@@ -86,24 +107,38 @@ Remember:
 """.strip()
 
 
-def _safe_fallback(raw: str) -> Dict:
+def _safe_fallback(raw: str) -> Dict[str, Any]:
     raw = (raw or "").strip()
 
-    # try to pull message from near-JSON
-    m = re.search(r'"message"\s*:\s*"([^"]+)"', raw, re.DOTALL)
-    if m:
-        msg = m.group(1).strip()
-        return {"message": msg, "confidence": 0.45}
+    # "message: ...." varsa baştan kırp
+    raw2 = _RE_LEADING_MESSAGE_PREFIX.sub("", raw).strip()
 
-    msg = re.sub(r"\s+", " ", raw)
+    # near-json içinden message çek
+    m = _RE_NEAR_JSON_MESSAGE.search(raw2)
+    if m:
+        msg = m.group("msg").strip()
+        msg = msg.replace('\\"', '"').replace("\\n", "\n")
+        msg = _RE_LEADING_MESSAGE_PREFIX.sub("", msg).strip()
+        return {"message": msg, "confidence": 0.35}
+
+    # plain text dön
+    msg = re.sub(r"\s+", " ", raw2)
     if len(msg) > 600:
         msg = msg[:600] + "..."
     if not msg:
         msg = "I’m not sure based on the available information."
-    return {"message": msg, "confidence": 0.35}
+    return {"message": msg, "confidence": 0.30}
 
 
-def _normalize_llm_obj(obj) -> Dict:
+def _normalize_llm_obj(obj: Any) -> Dict[str, Any]:
+    """
+    Normalize output to:
+      {"message": "<plain text>", "confidence": float}
+    Fixes:
+    - message field contains JSON string
+    - message starts with 'message:' prefix
+    - confidence type issues
+    """
     if not isinstance(obj, dict):
         return {"message": str(obj), "confidence": 0.5}
 
@@ -117,17 +152,22 @@ def _normalize_llm_obj(obj) -> Dict:
         conf = 0.5
     conf = max(0.0, min(1.0, conf))
 
+    if msg is None:
+        msg = ""
     if not isinstance(msg, str):
         msg = str(msg)
 
     s = msg.strip()
 
-    # ✅ 1) Eğer message içi JSON string'i gibi görünüyorsa (tam olmasa bile) JSON bloğunu ayıkla
-    # ör: "{\"message\": \"...\", \"confidence\": 0.6"  -> içte { ... } parçasını çek
+    # ✅ 0) baştaki message: / "message": gibi prefixleri yok et
+    s = _RE_LEADING_MESSAGE_PREFIX.sub("", s).strip()
+
+    # ✅ 1) message alanı JSON string'i gibi ise içini aç
+    # ör: "{\"message\": \"Hello\", \"confidence\": 0.6}"
     inner_candidate = _clean_json_string(s)
 
-    # ✅ 2) inner JSON parse dene
     if inner_candidate and inner_candidate.startswith("{"):
+        # önce direkt json dene
         try:
             inner = json.loads(inner_candidate)
             if isinstance(inner, dict) and "message" in inner:
@@ -135,18 +175,33 @@ def _normalize_llm_obj(obj) -> Dict:
         except Exception:
             pass
 
-    # ✅ 3) Parse olmadıysa regex ile iç message'ı çek (kırpılmış olsa bile)
-    m = re.search(r'"message"\s*:\s*"(.+?)"\s*(?:,|})', s, re.DOTALL)
-    if m:
-        extracted = m.group(1).strip()
-        # escaped quotes temizle
-        extracted = extracted.replace('\\"', '"')
+    # ✅ 2) Yukarıdaki parse olmadıysa regex ile iç message'ı çek
+    if ("\"message\"" in s) or ("{\\\"message\\\"" in s) or ("\\\"message\\\"" in s):
+        m = _RE_INNER_JSON_MESSAGE.search(s)
+        if m:
+            inner_msg = m.group("msg")
+            # escape çöz
+            try:
+                inner_msg = json.loads(f"\"{inner_msg}\"")
+            except Exception:
+                inner_msg = inner_msg.replace('\\"', '"').replace("\\n", "\n")
+            inner_msg = (inner_msg or "").strip()
+            inner_msg = _RE_LEADING_MESSAGE_PREFIX.sub("", inner_msg).strip()
+            return {"message": inner_msg, "confidence": conf}
+
+    # ✅ 3) yine olmadıysa near-json yakala (kırpılmış olabilir)
+    m2 = _RE_NEAR_JSON_MESSAGE.search(s)
+    if m2:
+        extracted = m2.group("msg").strip()
+        extracted = extracted.replace('\\"', '"').replace("\\n", "\n")
+        extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
         return {"message": extracted, "confidence": conf}
 
-    # ✅ 4) En son: düz metin gibi döndür
+    # ✅ 4) plain text
     return {"message": s, "confidence": conf}
 
-def generate_intent_response(question: str, context_passages: List[str]) -> Dict:
+
+def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -179,7 +234,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
                 obj = json.loads(cleaned)
                 return _normalize_llm_obj(obj)
             except Exception:
-                # JSON parse failed
+                # JSON parse failed -> fallback
                 return _safe_fallback(raw)
 
         except Exception as e:
