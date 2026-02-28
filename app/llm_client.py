@@ -1,4 +1,4 @@
-# app/llm_client.py  ✅ FINAL
+# app/llm_client.py  ✅ FINAL (robust JSON + double-JSON fix + retries)
 
 import json
 import re
@@ -23,7 +23,7 @@ CRITICAL RULES:
 
 Output:
 - Respond ONLY with valid JSON (no markdown, no extra text).
-- "message" must be plain text.
+- "message" must be plain text (NOT JSON string).
 - JSON format:
   {"message": "...", "confidence": 0.xx}
 """.strip()
@@ -51,16 +51,14 @@ def _clean_json_string(text: str) -> str:
 
 
 def build_intent_prompt(question: str, context_passages: List[str]) -> str:
-    # Passage-based trimming (daha stabil)
     trimmed: List[str] = []
     total_chars = 0
-    LIMIT = 3500  # context limit
+    LIMIT = 3500
 
     for p in context_passages or []:
         if not p:
             continue
         pp = p.strip()
-        # each passage clamp
         if len(pp) > 1800:
             pp = pp[:1800]
         if total_chars + len(pp) > LIMIT:
@@ -68,7 +66,11 @@ def build_intent_prompt(question: str, context_passages: List[str]) -> str:
         trimmed.append(pp)
         total_chars += len(pp)
 
-    context_text = "\n\n".join([f"[DOC {i+1}]\n{t}" for i, t in enumerate(trimmed)]) if trimmed else "No relevant campus info found."
+    context_text = (
+        "\n\n".join([f"[DOC {i+1}]\n{t}" for i, t in enumerate(trimmed)])
+        if trimmed
+        else "No relevant campus info found."
+    )
 
     return f"""
 CONTEXT:
@@ -87,19 +89,49 @@ Remember:
 def _safe_fallback(raw: str) -> Dict:
     raw = (raw or "").strip()
 
-    # try to pull message if model produced something close to JSON
+    # try to pull message from near-JSON
     m = re.search(r'"message"\s*:\s*"([^"]+)"', raw, re.DOTALL)
     if m:
         msg = m.group(1).strip()
         return {"message": msg, "confidence": 0.45}
 
-    # else: just return cleaned text
     msg = re.sub(r"\s+", " ", raw)
     if len(msg) > 600:
         msg = msg[:600] + "..."
     if not msg:
         msg = "I’m not sure based on the available information."
     return {"message": msg, "confidence": 0.35}
+
+
+def _normalize_llm_obj(obj) -> Dict:
+    if not isinstance(obj, dict):
+        return {"message": str(obj), "confidence": 0.5}
+
+    msg = obj.get("message", "")
+    conf = obj.get("confidence", 0.5)
+
+    # confidence normalize
+    try:
+        conf = float(conf)
+    except Exception:
+        conf = 0.5
+    conf = max(0.0, min(1.0, conf))
+
+    # 🔥 double-JSON fix: message is itself a JSON string
+    if isinstance(msg, str):
+        s = msg.strip()
+        if s.startswith("{") and s.endswith("}"):
+            try:
+                inner = json.loads(s)
+                if isinstance(inner, dict) and "message" in inner:
+                    return _normalize_llm_obj(inner)
+            except Exception:
+                pass
+
+    if not isinstance(msg, str):
+        msg = str(msg)
+
+    return {"message": msg.strip(), "confidence": conf}
 
 
 def generate_intent_response(question: str, context_passages: List[str]) -> Dict:
@@ -111,15 +143,15 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
         ],
         "temperature": 0.2,
         "options": {
-            "num_ctx": 2048,      # 1024 küçük kalabiliyor
-            "num_predict": 96,   # 64 çok kısa → yarım cümle yapar
+            "num_ctx": 2048,
+            "num_predict": 96,
         },
         "stream": False,
     }
 
     last_err = None
 
-    for attempt in range(3):  # retry
+    for attempt in range(3):
         try:
             resp = requests.post(
                 f"{settings.llm_base_url}/api/chat",
@@ -133,23 +165,13 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
 
             try:
                 obj = json.loads(cleaned)
-                # guarantee keys
-                msg = str(obj.get("message", "")).strip()
-                conf = obj.get("confidence", 0.5)
-                try:
-                    conf = float(conf)
-                except Exception:
-                    conf = 0.5
-                if not msg:
-                    return {"message": "I’m not sure based on the available information.", "confidence": 0.25}
-                return {"message": msg, "confidence": max(0.0, min(1.0, conf))}
+                return _normalize_llm_obj(obj)
             except Exception:
-                # JSON parse patladı
+                # JSON parse failed
                 return _safe_fallback(raw)
 
         except Exception as e:
             last_err = e
             time.sleep(0.6 * (attempt + 1))
 
-    # all failed
     return {"message": "Temporary error while answering. Please retry.", "confidence": 0.2, "error": str(last_err)}
