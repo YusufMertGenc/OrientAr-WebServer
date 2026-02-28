@@ -42,6 +42,10 @@ _RE_INNER_JSON_MESSAGE = re.compile(
     r'"message"\s*:\s*"(?P<msg>(?:\\.|[^"\\])*)"',
     re.DOTALL
 )
+_RE_ESCAPED_MESSAGE = re.compile(
+    r'\\"message\\"\s*:\s*\\"(?P<msg>.*?)(?:\\"(?:\s*,|\s*})|$)',
+    re.DOTALL
+)
 
 # near-json içinden message yakalama (kırpılmış JSON durumları için)
 _RE_NEAR_JSON_MESSAGE = re.compile(
@@ -130,22 +134,13 @@ def _safe_fallback(raw: str) -> Dict[str, Any]:
     return {"message": msg, "confidence": 0.30}
 
 
-def _normalize_llm_obj(obj: Any) -> Dict[str, Any]:
-    """
-    Normalize output to:
-      {"message": "<plain text>", "confidence": float}
-    Fixes:
-    - message field contains JSON string
-    - message starts with 'message:' prefix
-    - confidence type issues
-    """
+def _normalize_llm_obj(obj) -> Dict:
     if not isinstance(obj, dict):
         return {"message": str(obj), "confidence": 0.5}
 
     msg = obj.get("message", "")
     conf = obj.get("confidence", 0.5)
 
-    # confidence normalize
     try:
         conf = float(conf)
     except Exception:
@@ -159,45 +154,45 @@ def _normalize_llm_obj(obj: Any) -> Dict[str, Any]:
 
     s = msg.strip()
 
-    # ✅ 0) baştaki message: / "message": gibi prefixleri yok et
+    # ✅ 0) baştaki message: prefix varsa sil
     s = _RE_LEADING_MESSAGE_PREFIX.sub("", s).strip()
 
-    # ✅ 1) message alanı JSON string'i gibi ise içini aç
-    # ör: "{\"message\": \"Hello\", \"confidence\": 0.6}"
-    inner_candidate = _clean_json_string(s)
+    # ✅ 1) ESCAPED JSON string case: {\"message\": \"...   (kırpılmış da olabilir)
+    if '\\"message\\"' in s or s.startswith('{\\\"'):
+        m = _RE_ESCAPED_MESSAGE.search(s)
+        if m:
+            extracted = m.group("msg").strip()
+            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
+            return {"message": extracted, "confidence": conf}
 
+        # ✅ 1b) brute unescape dene, sonra normal yakala
+        s2 = s.replace('\\"', '"')
+        s2 = _RE_LEADING_MESSAGE_PREFIX.sub("", s2).strip()
+
+        m2 = _RE_NEAR_JSON_MESSAGE.search(s2)
+        if m2:
+            extracted = m2.group("msg").strip()
+            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
+            return {"message": extracted, "confidence": conf}
+
+    # ✅ 2) message içi gerçek JSON varsa parse et
+    inner_candidate = _clean_json_string(s)
     if inner_candidate and inner_candidate.startswith("{"):
-        # önce direkt json dene
         try:
             inner = json.loads(inner_candidate)
             if isinstance(inner, dict) and "message" in inner:
-                return _normalize_llm_obj(inner)  # recursion
+                return _normalize_llm_obj(inner)
         except Exception:
             pass
 
-    # ✅ 2) Yukarıdaki parse olmadıysa regex ile iç message'ı çek
-    if ("\"message\"" in s) or ("{\\\"message\\\"" in s) or ("\\\"message\\\"" in s):
-        m = _RE_INNER_JSON_MESSAGE.search(s)
-        if m:
-            inner_msg = m.group("msg")
-            # escape çöz
-            try:
-                inner_msg = json.loads(f"\"{inner_msg}\"")
-            except Exception:
-                inner_msg = inner_msg.replace('\\"', '"').replace("\\n", "\n")
-            inner_msg = (inner_msg or "").strip()
-            inner_msg = _RE_LEADING_MESSAGE_PREFIX.sub("", inner_msg).strip()
-            return {"message": inner_msg, "confidence": conf}
-
-    # ✅ 3) yine olmadıysa near-json yakala (kırpılmış olabilir)
-    m2 = _RE_NEAR_JSON_MESSAGE.search(s)
-    if m2:
-        extracted = m2.group("msg").strip()
+    # ✅ 3) normal near-json yakala
+    m3 = _RE_NEAR_JSON_MESSAGE.search(s)
+    if m3:
+        extracted = m3.group("msg").strip()
         extracted = extracted.replace('\\"', '"').replace("\\n", "\n")
         extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
         return {"message": extracted, "confidence": conf}
 
-    # ✅ 4) plain text
     return {"message": s, "confidence": conf}
 
 
