@@ -37,6 +37,11 @@ _RE_LEADING_MESSAGE_PREFIX = re.compile(
     re.IGNORECASE
 )
 
+_RE_INNER_MESSAGE_UNESCAPED = re.compile(
+    r'"message"\s*:\s*"(?P<msg>.*?)(?:"\s*,|"\s*}|"$|$)',
+    re.DOTALL
+)
+
 # iç içe JSON string içinden "message":"..." yakalar (escape'li de olsa)
 _RE_INNER_JSON_MESSAGE = re.compile(
     r'"message"\s*:\s*"(?P<msg>(?:\\.|[^"\\])*)"',
@@ -134,13 +139,14 @@ def _safe_fallback(raw: str) -> Dict[str, Any]:
     return {"message": msg, "confidence": 0.30}
 
 
-def _normalize_llm_obj(obj) -> Dict:
+def _normalize_llm_obj(obj) -> Dict[str, Any]:
     if not isinstance(obj, dict):
         return {"message": str(obj), "confidence": 0.5}
 
     msg = obj.get("message", "")
     conf = obj.get("confidence", 0.5)
 
+    # confidence normalize
     try:
         conf = float(conf)
     except Exception:
@@ -153,46 +159,54 @@ def _normalize_llm_obj(obj) -> Dict:
         msg = str(msg)
 
     s = msg.strip()
-
-    # ✅ 0) baştaki message: prefix varsa sil
     s = _RE_LEADING_MESSAGE_PREFIX.sub("", s).strip()
 
-    # ✅ 1) ESCAPED JSON string case: {\"message\": \"...   (kırpılmış da olabilir)
-    if '\\"message\\"' in s or s.startswith('{\\\"'):
-        m = _RE_ESCAPED_MESSAGE.search(s)
-        if m:
-            extracted = m.group("msg").strip()
-            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
-            return {"message": extracted, "confidence": conf}
-
-        # ✅ 1b) brute unescape dene, sonra normal yakala
-        s2 = s.replace('\\"', '"')
-        s2 = _RE_LEADING_MESSAGE_PREFIX.sub("", s2).strip()
-
-        m2 = _RE_NEAR_JSON_MESSAGE.search(s2)
-        if m2:
-            extracted = m2.group("msg").strip()
-            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
-            return {"message": extracted, "confidence": conf}
-
-    # ✅ 2) message içi gerçek JSON varsa parse et
-    inner_candidate = _clean_json_string(s)
-    if inner_candidate and inner_candidate.startswith("{"):
+    # ✅ CASE A: message field itself looks like JSON object string (UNESCAPED)
+    # e.g. {"message":"...", "confidence":0.3}
+    if s.startswith("{") and '"message"' in s:
+        # 1) try parse full JSON
         try:
-            inner = json.loads(inner_candidate)
+            inner = json.loads(s)
             if isinstance(inner, dict) and "message" in inner:
                 return _normalize_llm_obj(inner)
         except Exception:
             pass
 
-    # ✅ 3) normal near-json yakala
-    m3 = _RE_NEAR_JSON_MESSAGE.search(s)
-    if m3:
-        extracted = m3.group("msg").strip()
-        extracted = extracted.replace('\\"', '"').replace("\\n", "\n")
-        extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
-        return {"message": extracted, "confidence": conf}
+        # 2) if it's truncated JSON, regex extract message value
+        m = _RE_INNER_MESSAGE_UNESCAPED.search(s)
+        if m:
+            extracted = m.group("msg").strip()
+            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
+            extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
+            return {"message": extracted, "confidence": conf}
 
+    # ✅ CASE B: message field is ESCAPED json string (rare)
+    # e.g. {\"message\": \"...\" ...}
+    if '\\"message\\"' in s or s.startswith('{\\\"'):
+        m = _RE_ESCAPED_MESSAGE.search(s)
+        if m:
+            extracted = m.group("msg").strip()
+            extracted = extracted.replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"')
+            extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
+            return {"message": extracted, "confidence": conf}
+
+        # brute unescape then retry as unescaped json
+        s2 = s.replace('\\"', '"')
+        if s2.startswith("{") and '"message"' in s2:
+            try:
+                inner2 = json.loads(s2)
+                if isinstance(inner2, dict) and "message" in inner2:
+                    return _normalize_llm_obj(inner2)
+            except Exception:
+                pass
+            m2 = _RE_INNER_MESSAGE_UNESCAPED.search(s2)
+            if m2:
+                extracted = m2.group("msg").strip()
+                extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
+                extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
+                return {"message": extracted, "confidence": conf}
+
+    # ✅ Normal: plain text already
     return {"message": s, "confidence": conf}
 
 
