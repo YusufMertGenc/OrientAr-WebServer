@@ -104,10 +104,4 @@ CHROMA_DIR</code></pre>
   receive responses in real time.
 </p>
 
-<h2>Future Improvements</h2>
-<ul>
-  <li>Faster response generation using GPU-based models</li>
-  <li>Expansion of the knowledge base</li>
-  <li>Improved retrieval accuracy</li>
-  <li>Deployment on scalable cloud infrastructure</li>
-</ul>
+
