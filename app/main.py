@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Global exception handler (logda traceback gör + client'a kontrollü dön)
+#  Global exception handler (logda traceback gör + client'a kontrollü dön)
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     print("[UNHANDLED ERROR]", repr(exc))

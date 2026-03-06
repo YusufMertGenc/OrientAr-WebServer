@@ -1,5 +1,3 @@
-# app/firebase_kb.py
-
 import os
 import base64
 import tempfile

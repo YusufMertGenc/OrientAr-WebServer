@@ -1,6 +1,4 @@
-# app/rag.py  ✅ FINAL-PRODUCT: KB-driven RAG with safe embeddings + metadata routing + chunk-first ingestion
-
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import math
