@@ -1,6 +1,4 @@
-# app/llm_client.py  ✅ FINAL (robust JSON + double-JSON + "message:" prefix killer + retries)
-
-import json
+﻿import json
 import re
 import time
 from typing import List, Dict, Any
@@ -83,14 +81,14 @@ def _clean_json_string(text: str) -> str:
 def build_intent_prompt(question: str, context_passages: List[str]) -> str:
     trimmed: List[str] = []
     total_chars = 0
-    LIMIT = 3500
+    LIMIT = 1800
 
     for p in context_passages or []:
         if not p:
             continue
         pp = p.strip()
-        if len(pp) > 1800:
-            pp = pp[:1800]
+        if len(pp) > 700:
+            pp = pp[:700]
         if total_chars + len(pp) > LIMIT:
             break
         trimmed.append(pp)
@@ -161,7 +159,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
     s = msg.strip()
     s = _RE_LEADING_MESSAGE_PREFIX.sub("", s).strip()
 
-    # ✅ CASE A: message field itself looks like JSON object string (UNESCAPED)
+    #  CASE A: message field itself looks like JSON object string (UNESCAPED)
     # e.g. {"message":"...", "confidence":0.3}
     if s.startswith("{") and '"message"' in s:
         # 1) try parse full JSON
@@ -180,7 +178,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
             extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
             return {"message": extracted, "confidence": conf}
 
-    # ✅ CASE B: message field is ESCAPED json string (rare)
+    #  CASE B: message field is ESCAPED json string (rare)
     # e.g. {\"message\": \"...\" ...}
     if '\\"message\\"' in s or s.startswith('{\\\"'):
         m = _RE_ESCAPED_MESSAGE.search(s)
@@ -206,7 +204,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
                 extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
                 return {"message": extracted, "confidence": conf}
 
-    # ✅ Normal: plain text already
+    #  Normal: plain text already
     return {"message": s, "confidence": conf}
 
 
@@ -219,8 +217,8 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
         ],
         "temperature": 0.2,
         "options": {
-            "num_ctx": 2048,
-            "num_predict": 96,
+            "num_ctx": 1024,
+            "num_predict": 64,
         },
         "stream": False,
     }
@@ -232,7 +230,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
             resp = requests.post(
                 f"{settings.llm_base_url}/api/chat",
                 json=payload,
-                timeout=180,
+                timeout=90,
             )
             resp.raise_for_status()
 

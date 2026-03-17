@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     embedding_model: str
     chroma_dir: str
     firebase_sa_b64: Optional[str] = None
+    google_application_credentials: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

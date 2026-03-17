@@ -4,7 +4,7 @@ import tempfile
 import firebase_admin
 from firebase_admin import credentials, firestore
 from typing import List, Dict, Tuple, Optional
-
+from .config import settings
 COL_ITEMS = "chatbot_kb_items"
 COL_META = "chatbot_kb_meta"
 DOC_META = "current"
@@ -30,7 +30,7 @@ def init_firebase(service_account_path: str | None = None):
         _app_inited = True
         return
 
-    sa_b64 = os.getenv("FIREBASE_SA_B64")
+    sa_b64 = settings.firebase_sa_b64
     if sa_b64:
         decoded = base64.b64decode(sa_b64)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
@@ -43,7 +43,7 @@ def init_firebase(service_account_path: str | None = None):
         _app_inited = True
         return
 
-    gac_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    gac_path = settings.google_application_credentials
     if gac_path and os.path.exists(gac_path):
         cred = credentials.Certificate(gac_path)
         firebase_admin.initialize_app(cred)

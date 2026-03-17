@@ -378,7 +378,7 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     q = question or ""
     q_emb = ollama_embed([q])[0]
 
-    routed = top_topics(q_emb, top_n=5)
+    routed = top_topics(q_emb, top_n=3)
     max_topic_score = max((s for _, s in routed), default=0.0)
 
     if max_topic_score < TOPIC_DOMAIN_GUARD:
