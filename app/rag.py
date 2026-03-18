@@ -29,8 +29,8 @@ TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "250"))
 TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "4"))
 TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.38"))
 
-DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "4"))
-FINAL_DOCS = int(os.getenv("FINAL_DOCS", "2"))
+DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "5"))
+FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))
 
 EMBED_TIMEOUT = int(os.getenv("EMBED_TIMEOUT", "20"))
 

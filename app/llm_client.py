@@ -27,6 +27,7 @@ Rules:
 - Never output markdown.
 - Never output code fences.
 - Return ONLY valid JSON.
+-If the question is broad, include multiple relevant aspects from the context.
 
 JSON format:
 {"message": "...", "confidence": 0.xx}
