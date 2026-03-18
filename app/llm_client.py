@@ -1,35 +1,70 @@
 ﻿import json
 import re
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import requests
 from .config import settings
 
 
 INTENT_SYSTEM_PROMPT = """
-You are OrientAR, an assistant for a campus application.
-Assume all questions are about METU NCC unless stated otherwise.
+You are OrientAR, a campus orientation assistant for METU Northern Cyprus Campus (METU NCC).
 
-You MUST use ONLY the provided context.
-You MUST NOT use any external knowledge.
+Your job is to help students with:
+- campus orientation
+- campus facilities
+- student life
+- clubs and societies
+- navigation-related campus questions
+- general METU NCC information
 
-CRITICAL RULES:
-- Always finish sentences. Never stop mid-sentence.
-- If context contains a list (e.g. dormitories), list ALL items mentioned.
-- Do not hallucinate new items.
+Rules:
+- Use ONLY the provided context.
+- Do NOT invent facts that are not in the context.
+- Keep answers concise, helpful, and focused.
+- Usually answer in 2-5 sentences unless listing items from context is necessary.
+- If the context is insufficient, say so briefly.
+- Never output markdown.
+- Never output code fences.
+- Return ONLY valid JSON.
 
-Output:
-- Respond ONLY with valid JSON (no markdown, no extra text).
-- "message" must be plain text (NOT JSON string).
-- JSON format:
-  {"message": "...", "confidence": 0.xx}
+JSON format:
+{"message": "...", "confidence": 0.xx}
 """.strip()
 
 
-# -------------------- helpers --------------------
+OUT_OF_DOMAIN_MESSAGE = (
+    "I mainly help with METU NCC campus-related questions such as orientation, "
+    "facilities, student life, clubs, and navigation."
+)
 
-# message: / "message": / Message= ... prefix siler (tekrar tekrar olsa bile)
+
+PREDEFINED_RESPONSES = {
+    "what_is_orientar": {
+        "message": (
+            "OrientAR is a campus orientation assistant designed to help students "
+            "get used to METU NCC by providing campus-related information and guidance."
+        ),
+        "confidence": 0.95,
+    },
+    "how_can_you_help": {
+        "message": (
+            "I can help you with METU NCC campus-related questions such as orientation, "
+            "facilities, student life, clubs, and general campus information."
+        ),
+        "confidence": 0.95,
+    },
+    "new_student_help": {
+        "message": (
+            "I can help new students get used to METU NCC by answering campus-related "
+            "questions, explaining facilities, sharing student life information, and "
+            "guiding them on orientation-related topics."
+        ),
+        "confidence": 0.95,
+    },
+}
+
+
 _RE_LEADING_MESSAGE_PREFIX = re.compile(
     r'^\s*(?:["\']?\s*message\s*["\']?\s*[:=]\s*)+',
     re.IGNORECASE
@@ -40,27 +75,36 @@ _RE_INNER_MESSAGE_UNESCAPED = re.compile(
     re.DOTALL
 )
 
-# iç içe JSON string içinden "message":"..." yakalar (escape'li de olsa)
-_RE_INNER_JSON_MESSAGE = re.compile(
-    r'"message"\s*:\s*"(?P<msg>(?:\\.|[^"\\])*)"',
-    re.DOTALL
-)
 _RE_ESCAPED_MESSAGE = re.compile(
     r'\\"message\\"\s*:\s*\\"(?P<msg>.*?)(?:\\"(?:\s*,|\s*})|$)',
     re.DOTALL
 )
 
-# near-json içinden message yakalama (kırpılmış JSON durumları için)
 _RE_NEAR_JSON_MESSAGE = re.compile(
     r'"message"\s*:\s*"(?P<msg>.+?)"\s*(?:,|}|$)',
     re.DOTALL
 )
 
 
+def match_predefined_response(question: str) -> Optional[Dict[str, Any]]:
+    q = (question or "").strip().lower()
+
+    if "what is orientar" in q or "what does orientar do" in q:
+        return PREDEFINED_RESPONSES["what_is_orientar"]
+
+    if "how can you help" in q or "what can you do" in q:
+        return PREDEFINED_RESPONSES["how_can_you_help"]
+
+    if "i am a new student" in q or "i'm a new student" in q:
+        if "help" in q or "get used to the campus" in q:
+            return PREDEFINED_RESPONSES["new_student_help"]
+
+    return None
+
+
 def _clean_json_string(text: str) -> str:
     text = (text or "").strip()
 
-    # remove fenced blocks if any
     if text.startswith("```json"):
         text = text[7:]
     elif text.startswith("```"):
@@ -70,25 +114,24 @@ def _clean_json_string(text: str) -> str:
 
     text = text.strip()
 
-    # extract first {...} block
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        return text[start: end + 1]
+        return text[start:end + 1]
     return text
 
 
 def build_intent_prompt(question: str, context_passages: List[str]) -> str:
     trimmed: List[str] = []
     total_chars = 0
-    LIMIT = 1800
+    LIMIT = 1400
 
     for p in context_passages or []:
         if not p:
             continue
         pp = p.strip()
-        if len(pp) > 700:
-            pp = pp[:700]
+        if len(pp) > 500:
+            pp = pp[:500]
         if total_chars + len(pp) > LIMIT:
             break
         trimmed.append(pp)
@@ -108,19 +151,16 @@ QUESTION:
 {question}
 
 Remember:
-- Use only context
-- Finish sentences
-- Output ONLY JSON
+- Use only the context
+- Keep the answer concise
+- Output ONLY valid JSON
 """.strip()
 
 
 def _safe_fallback(raw: str) -> Dict[str, Any]:
     raw = (raw or "").strip()
-
-    # "message: ...." varsa baştan kırp
     raw2 = _RE_LEADING_MESSAGE_PREFIX.sub("", raw).strip()
 
-    # near-json içinden message çek
     m = _RE_NEAR_JSON_MESSAGE.search(raw2)
     if m:
         msg = m.group("msg").strip()
@@ -128,10 +168,9 @@ def _safe_fallback(raw: str) -> Dict[str, Any]:
         msg = _RE_LEADING_MESSAGE_PREFIX.sub("", msg).strip()
         return {"message": msg, "confidence": 0.35}
 
-    # plain text dön
     msg = re.sub(r"\s+", " ", raw2)
-    if len(msg) > 600:
-        msg = msg[:600] + "..."
+    if len(msg) > 500:
+        msg = msg[:500].rstrip() + "..."
     if not msg:
         msg = "I’m not sure based on the available information."
     return {"message": msg, "confidence": 0.30}
@@ -144,7 +183,6 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
     msg = obj.get("message", "")
     conf = obj.get("confidence", 0.5)
 
-    # confidence normalize
     try:
         conf = float(conf)
     except Exception:
@@ -159,10 +197,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
     s = msg.strip()
     s = _RE_LEADING_MESSAGE_PREFIX.sub("", s).strip()
 
-    #  CASE A: message field itself looks like JSON object string (UNESCAPED)
-    # e.g. {"message":"...", "confidence":0.3}
     if s.startswith("{") and '"message"' in s:
-        # 1) try parse full JSON
         try:
             inner = json.loads(s)
             if isinstance(inner, dict) and "message" in inner:
@@ -170,7 +205,6 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
         except Exception:
             pass
 
-        # 2) if it's truncated JSON, regex extract message value
         m = _RE_INNER_MESSAGE_UNESCAPED.search(s)
         if m:
             extracted = m.group("msg").strip()
@@ -178,8 +212,6 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
             extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
             return {"message": extracted, "confidence": conf}
 
-    #  CASE B: message field is ESCAPED json string (rare)
-    # e.g. {\"message\": \"...\" ...}
     if '\\"message\\"' in s or s.startswith('{\\\"'):
         m = _RE_ESCAPED_MESSAGE.search(s)
         if m:
@@ -188,7 +220,6 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
             extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
             return {"message": extracted, "confidence": conf}
 
-        # brute unescape then retry as unescaped json
         s2 = s.replace('\\"', '"')
         if s2.startswith("{") and '"message"' in s2:
             try:
@@ -197,14 +228,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
                     return _normalize_llm_obj(inner2)
             except Exception:
                 pass
-            m2 = _RE_INNER_MESSAGE_UNESCAPED.search(s2)
-            if m2:
-                extracted = m2.group("msg").strip()
-                extracted = extracted.replace("\\n", "\n").replace("\\t", "\t")
-                extracted = _RE_LEADING_MESSAGE_PREFIX.sub("", extracted).strip()
-                return {"message": extracted, "confidence": conf}
 
-    #  Normal: plain text already
     return {"message": s, "confidence": conf}
 
 
@@ -215,10 +239,10 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
             {"role": "system", "content": INTENT_SYSTEM_PROMPT},
             {"role": "user", "content": build_intent_prompt(question, context_passages)},
         ],
-        "temperature": 0.2,
+        "temperature": 0.15,
         "options": {
-            "num_ctx": 1536,
-            "num_predict": 96,
+            "num_ctx": 1280,
+            "num_predict": 80,
         },
         "stream": False,
     }
@@ -230,7 +254,7 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
             resp = requests.post(
                 f"{settings.llm_base_url}/api/chat",
                 json=payload,
-                timeout=90,
+                timeout=60,
             )
             resp.raise_for_status()
 
@@ -241,11 +265,14 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
                 obj = json.loads(cleaned)
                 return _normalize_llm_obj(obj)
             except Exception:
-                # JSON parse failed -> fallback
                 return _safe_fallback(raw)
 
         except Exception as e:
             last_err = e
-            time.sleep(0.6 * (attempt + 1))
+            time.sleep(0.5 * (attempt + 1))
 
-    return {"message": "Temporary error while answering. Please retry.", "confidence": 0.2, "error": str(last_err)}
+    return {
+        "message": "Temporary error while answering. Please retry.",
+        "confidence": 0.2,
+        "error": str(last_err),
+    }

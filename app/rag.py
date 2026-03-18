@@ -372,7 +372,7 @@ def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[st
 
 def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     if _REBUILDING:
-        return {"documents": [], "domain_score": 0.0}
+        return {"documents": [], "domain_score": 0.0, "in_domain": False}
 
     q = question or ""
     q_emb = ollama_embed([q])[0]
@@ -381,14 +381,13 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     max_topic_score = max((s for _, s in routed), default=0.0)
 
     if max_topic_score < TOPIC_DOMAIN_GUARD:
-        return {"documents": [], "domain_score": max_topic_score}
+        return {"documents": [], "domain_score": max_topic_score, "in_domain": False}
 
     routed_ids = [tid for tid, _ in routed]
 
     candidates: List[Tuple[str, float]] = []
     seen = set()
 
-    # Routed docs (boost)
     for doc_id in routed_ids[:2]:
         it = _KB_BY_ID.get(doc_id)
         if not it:
@@ -399,7 +398,6 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
             seen.add(doc)
             candidates.append((doc, 0.85))
 
-    # Dense fallback
     try:
         res = _collection.query(
             query_embeddings=[q_emb],
@@ -421,10 +419,14 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
         print(f"[RAG] Dense query failed: {e}")
 
     if not candidates:
-        return {"documents": [], "domain_score": max_topic_score}
+        return {"documents": [], "domain_score": max_topic_score, "in_domain": True}
 
     best_docs = rerank_documents(q, candidates)
-    return {"documents": best_docs, "domain_score": max_topic_score}
+    return {
+        "documents": best_docs,
+        "domain_score": max_topic_score,
+        "in_domain": True,
+    }
 
 # -------------------- KB Watcher --------------------
 
@@ -472,3 +474,17 @@ def start_kb_watcher(interval_sec: int = 600):
 
     t = threading.Thread(target=_loop, daemon=True)
     t.start()
+
+def is_in_domain(question: str) -> Tuple[bool, float]:
+    if _REBUILDING:
+        return False, 0.0
+
+    q = (question or "").strip()
+    if not q:
+        return False, 0.0
+
+    q_emb = ollama_embed([q])[0]
+    routed = top_topics(q_emb, top_n=TOPIC_TOP_N)
+    max_topic_score = max((s for _, s in routed), default=0.0)
+
+    return max_topic_score >= TOPIC_DOMAIN_GUARD, max_topic_score
