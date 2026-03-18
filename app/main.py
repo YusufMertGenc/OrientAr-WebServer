@@ -91,7 +91,7 @@ def chatbot_query(req: ChatRequest):
     llm_json = generate_intent_response(question, documents)
     latency_ms = int((time.time() - started) * 1000)
 
-    answer = str(llm_json.get("message", "")).strip()
+    answer = final_answer_cleanup(str(llm_json.get("message", "")))
     confidence = float(llm_json.get("confidence", 0.5))
 
     if not answer:
@@ -106,3 +106,41 @@ def chatbot_query(req: ChatRequest):
         domain_score=domain_score,
         in_domain=True,
     )
+
+import json
+import re
+
+def final_answer_cleanup(text: str) -> str:
+    s = (text or "").strip()
+
+    # baştaki tek tırnak/çift tırnak temizle
+    s = s.strip(' "\'')
+
+    # escaped json string ise çöz
+    if '\\"message\\"' in s or s.startswith('{\\'):
+        try:
+            s2 = s.replace('\\"', '"')
+            obj = json.loads(s2)
+            if isinstance(obj, dict) and "message" in obj:
+                s = str(obj["message"]).strip()
+        except Exception:
+            pass
+
+    # normal json object string ise çöz
+    if s.startswith("{") and '"message"' in s:
+        try:
+            obj = json.loads(s)
+            if isinstance(obj, dict) and "message" in obj:
+                s = str(obj["message"]).strip()
+        except Exception:
+            m = re.search(r'"message"\s*:\s*"(.+?)"', s)
+            if m:
+                s = m.group(1).strip()
+
+    # whitespace cleanup
+    s = re.sub(r"\s+", " ", s).strip()
+
+    # başta kalan quote
+    s = s.lstrip('"').strip()
+
+    return s
