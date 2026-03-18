@@ -22,20 +22,20 @@ from .firebase_kb import (
 
 META_DOC_ID = "__kb_meta__"
 
-EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "6000"))
-EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "2000"))
-TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "320"))
+EMBED_MAX_CHARS = int(os.getenv("EMBED_MAX_CHARS", "2500"))
+EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "1200"))
+TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "250"))
 
-TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "7"))
-TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.33"))
+TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "4"))
+TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.38"))
 
-DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "10"))
-FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))
+DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "4"))
+FINAL_DOCS = int(os.getenv("FINAL_DOCS", "2"))
 
-EMBED_TIMEOUT = int(os.getenv("EMBED_TIMEOUT", "60"))
+EMBED_TIMEOUT = int(os.getenv("EMBED_TIMEOUT", "20"))
 
 # Query-time doc clamp (LLM’e yollayacağın context için)
-QUERY_DOC_MAX_CHARS = int(os.getenv("QUERY_DOC_MAX_CHARS", "2500"))
+QUERY_DOC_MAX_CHARS = int(os.getenv("QUERY_DOC_MAX_CHARS", "1400"))
 
 # -------------------- Chroma --------------------
 
@@ -371,14 +371,13 @@ def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[st
 # -------------------- Main RAG --------------------
 
 def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
-    # watcher rebuild ederken query gelirse: boş dön (500 olmasın)
     if _REBUILDING:
         return {"documents": [], "domain_score": 0.0}
 
     q = question or ""
     q_emb = ollama_embed([q])[0]
 
-    routed = top_topics(q_emb, top_n=3)
+    routed = top_topics(q_emb, top_n=TOPIC_TOP_N)
     max_topic_score = max((s for _, s in routed), default=0.0)
 
     if max_topic_score < TOPIC_DOMAIN_GUARD:
@@ -390,7 +389,7 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
     seen = set()
 
     # Routed docs (boost)
-    for doc_id in routed_ids:
+    for doc_id in routed_ids[:2]:
         it = _KB_BY_ID.get(doc_id)
         if not it:
             continue
@@ -426,7 +425,6 @@ def rag_query(question: str, top_k: int = DENSE_TOP_K) -> Dict:
 
     best_docs = rerank_documents(q, candidates)
     return {"documents": best_docs, "domain_score": max_topic_score}
-
 
 # -------------------- KB Watcher --------------------
 

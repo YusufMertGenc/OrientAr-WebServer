@@ -217,8 +217,8 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
         ],
         "temperature": 0.2,
         "options": {
-            "num_ctx": 1024,
-            "num_predict": 64,
+            "num_ctx": 1536,
+            "num_predict": 96,
         },
         "stream": False,
     }
