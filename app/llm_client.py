@@ -89,7 +89,7 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
 )
 
 _http_client: Optional[httpx.AsyncClient] = None
-_llm_semaphore = asyncio.Semaphore(2)
+_llm_semaphore = asyncio.Semaphore(4)
 _llm_cache = TTLCache(maxsize=1000, ttl=600)
 
 
