@@ -301,8 +301,9 @@ def _ollama_embed_one(prompt: str) -> List[float]:
 
 def ollama_embed(texts: List[str]) -> List[List[float]]:
     out: List[List[float]] = []
+    total = len(texts)
 
-    for raw in texts:
+    for i, raw in enumerate(texts, start=1):
         t = _clamp_for_embed(raw)
 
         if not t:
@@ -311,15 +312,18 @@ def ollama_embed(texts: List[str]) -> List[List[float]]:
         key = _md5(t)
         if key in _EMBED_CACHE:
             out.append(_EMBED_CACHE[key])
+            if i % 10 == 0 or i == total:
+                print(f"[EMBED] cache progress {i}/{total}", flush=True)
             continue
 
         emb = _ollama_embed_one(t)
         _EMBED_CACHE[key] = emb
         out.append(emb)
 
+        if i % 10 == 0 or i == total:
+            print(f"[EMBED] progress {i}/{total}", flush=True)
+
     return out
-
-
 # -------------------- Topic text builder --------------------
 
 def _topic_text_from_item(item: Dict) -> str:
@@ -383,30 +387,30 @@ def set_indexed_kb_version(kb_version: str):
 def load_kb_to_chroma(service_account_path: str | None = None):
     global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS, _REBUILDING
 
-    print("STEP 1: load_kb_to_chroma started")
+    print("STEP 1: load_kb_to_chroma started",flush=True)
     _REBUILDING = True
     try:
-        print("STEP 2: init_firebase starting")
+        print("STEP 2: init_firebase starting",flush=True)
         init_firebase(service_account_path)
-        print("STEP 3: init_firebase done")
+        print("STEP 3: init_firebase done",flush=True)
 
-        print("STEP 4: fetch_kb_version starting")
+        print("STEP 4: fetch_kb_version starting",flush=True)
         kb_version = fetch_kb_version()
-        print("STEP 5: fetch_kb_version done")
+        print("STEP 5: fetch_kb_version done",flush=True)
 
-        print("STEP 6: fetch_kb_fingerprint starting")
+        print("STEP 6: fetch_kb_fingerprint starting",flush=True)
         fp_count, fp_max_ut = fetch_kb_fingerprint()
-        print("STEP 7: fetch_kb_fingerprint done")
+        print("STEP 7: fetch_kb_fingerprint done",flush=True)
         kb_version_effective = f"{kb_version}|count={fp_count}|ut={fp_max_ut}"
 
-        print("STEP 8: fetch_kb_items starting")
+        print("STEP 8: fetch_kb_items starting",flush=True)
         kb_items = fetch_kb_items()
-        print(f"STEP 9: fetch_kb_items done, item_count={len(kb_items) if kb_items else 0}")
+        print(f"STEP 9: fetch_kb_items done, item_count={len(kb_items) if kb_items else 0}",flush=True)
 
         if not kb_items:
             raise RuntimeError("Firestore KB is empty (chatbot_kb_items).")
 
-        print("STEP 10: normalizing items")
+        print("STEP 10: normalizing items",flush=True)
         normalized: List[Dict] = []
         for it in kb_items:
             if it.get("isDeleted") is True:
@@ -417,7 +421,7 @@ def load_kb_to_chroma(service_account_path: str | None = None):
                 continue
             normalized.append(it)
 
-        print(f"STEP 11: normalization done, normalized_count={len(normalized)}")
+        print(f"STEP 11: normalization done, normalized_count={len(normalized)}",flush=True)
 
         if not normalized:
             raise RuntimeError("Firestore KB has no active (non-deleted) items.")
@@ -427,12 +431,12 @@ def load_kb_to_chroma(service_account_path: str | None = None):
         _TOPIC_IDS = [it["id"] for it in normalized]
         _TOPIC_TEXTS = [_topic_text_from_item(it) for it in normalized]
 
-        print(f"STEP 12: topic texts prepared, topic_count={len(_TOPIC_TEXTS)}")
-        print("STEP 13: topic embedding start")
+        print(f"STEP 12: topic texts prepared, topic_count={len(_TOPIC_TEXTS)}",flush=True)
+        print("STEP 13: topic embedding start",flush=True)
         _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
-        print("STEP 14: topic embedding done")
+        print("STEP 14: topic embedding done",flush=True)
 
-        print("STEP 15: checking indexed version")
+        print("STEP 15: checking indexed version",flush=True)
         indexed_version = get_indexed_kb_version()
         try:
             chroma_has_docs = _collection.count() > 0
@@ -444,16 +448,16 @@ def load_kb_to_chroma(service_account_path: str | None = None):
             f"indexed_version={indexed_version}, "
             f"kb_version_effective={kb_version_effective}, "
             f"chroma_has_docs={chroma_has_docs}"
-        )
+        ,flush=True)
 
         if chroma_has_docs and indexed_version == kb_version_effective:
             print(f"[RAG] Chroma up-to-date. kbVersion={kb_version_effective}. Skipping doc embedding build.")
-            print("STEP 17: early exit because chroma is up-to-date")
+            print("STEP 17: early exit because chroma is up-to-date",flush=True)
             return
 
         print(f"[RAG] Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
 
-        print("STEP 18: clearing old docs from Chroma")
+        print("STEP 18: clearing old docs from Chroma",flush=True)
         try:
             existing = _collection.get(include=[])
             if existing.get("ids"):
@@ -461,13 +465,13 @@ def load_kb_to_chroma(service_account_path: str | None = None):
                 if ids_to_delete:
                     _collection.delete(ids=ids_to_delete)
         except Exception as e:
-            print(f"STEP 18B: delete old docs warning: {e}")
+            print(f"STEP 18B: delete old docs warning: {e}",flush=True)
 
         ids: List[str] = []
         docs: List[str] = []
         metas: List[Dict] = []
 
-        print("STEP 19: preparing docs/metas for Chroma")
+        print("STEP 19: preparing docs/metas for Chroma",flush=True)
         for it in normalized:
             doc_id = str(it.get("id", "")).strip()
             if not doc_id:
