@@ -5,3 +5,6 @@ pydantic-settings
 chromadb
 requests
 python-dotenv
+httpx
+cachetools
+gunicorn

@@ -1,11 +1,14 @@
 ﻿import json
 import re
 import time
+import asyncio
+import logging
 from typing import List, Dict, Any, Optional
 
-import requests
+import httpx
 from .config import settings
 
+logger = logging.getLogger("orientar")
 
 INTENT_SYSTEM_PROMPT = """
 You are OrientAR, a campus orientation assistant for METU Northern Cyprus Campus (METU NCC).
@@ -27,18 +30,16 @@ Rules:
 - Never output markdown.
 - Never output code fences.
 - Return ONLY valid JSON.
--If the question is broad, include multiple relevant aspects from the context.
+- If the question is broad, include multiple relevant aspects from the context.
 
 JSON format:
 {"message": "...", "confidence": 0.xx}
 """.strip()
 
-
 OUT_OF_DOMAIN_MESSAGE = (
     "I mainly help with METU NCC campus-related questions such as orientation, "
     "facilities, student life, clubs, and navigation."
 )
-
 
 PREDEFINED_RESPONSES = {
     "what_is_orientar": {
@@ -65,7 +66,6 @@ PREDEFINED_RESPONSES = {
     },
 }
 
-
 _RE_LEADING_MESSAGE_PREFIX = re.compile(
     r'^\s*(?:["\']?\s*message\s*["\']?\s*[:=]\s*)+',
     re.IGNORECASE
@@ -85,6 +85,22 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
     r'"message"\s*:\s*"(?P<msg>.+?)"\s*(?:,|}|$)',
     re.DOTALL
 )
+
+_http_client: Optional[httpx.AsyncClient] = None
+_llm_semaphore = asyncio.Semaphore(4)  # 2 / 4 / 6 diye test et
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(
+                max_connections=200,
+                max_keepalive_connections=50,
+            ),
+        )
+    return _http_client
 
 
 def match_predefined_response(question: str) -> Optional[Dict[str, Any]]:
@@ -233,7 +249,7 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
     return {"message": s, "confidence": conf}
 
 
-def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
+async def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -249,28 +265,35 @@ def generate_intent_response(question: str, context_passages: List[str]) -> Dict
     }
 
     last_err = None
+    client = await get_http_client()
 
     for attempt in range(3):
         try:
-            resp = requests.post(
-                f"{settings.llm_base_url}/api/chat",
-                json=payload,
-                timeout=60,
-            )
-            resp.raise_for_status()
+            async with _llm_semaphore:
+                started = time.perf_counter()
 
-            raw = resp.json()["message"]["content"]
-            cleaned = _clean_json_string(raw)
+                resp = await client.post(
+                    f"{settings.llm_base_url}/api/chat",
+                    json=payload,
+                )
+                resp.raise_for_status()
 
-            try:
-                obj = json.loads(cleaned)
-                return _normalize_llm_obj(obj)
-            except Exception:
-                return _safe_fallback(raw)
+                raw = resp.json()["message"]["content"]
+                cleaned = _clean_json_string(raw)
+
+                duration = time.perf_counter() - started
+                logger.info(f"[LLM] duration={duration:.2f}s attempt={attempt+1}")
+
+                try:
+                    obj = json.loads(cleaned)
+                    return _normalize_llm_obj(obj)
+                except Exception:
+                    return _safe_fallback(raw)
 
         except Exception as e:
             last_err = e
-            time.sleep(0.5 * (attempt + 1))
+            logger.warning(f"[LLM] attempt={attempt+1} error={repr(e)}")
+            await asyncio.sleep(0.5 * (attempt + 1))
 
     return {
         "message": "Temporary error while answering. Please retry.",

@@ -1,5 +1,8 @@
 ﻿from __future__ import annotations
-
+import asyncio
+import logging
+import httpx
+from cachetools import TTLCache
 import hashlib
 import math
 import os
@@ -9,6 +12,67 @@ from typing import Dict, List, Tuple, Optional
 
 import requests
 from chromadb import PersistentClient
+
+logger = logging.getLogger("orientar")
+
+_embed_http_client: Optional[httpx.AsyncClient] = None
+_response_cache = TTLCache(maxsize=1000, ttl=600)  # 10 dk
+async def get_embed_http_client() -> httpx.AsyncClient:
+    global _embed_http_client
+    if _embed_http_client is None:
+        _embed_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(20.0, connect=10.0),
+            limits=httpx.Limits(max_connections=200, max_keepalive_connections=50),
+        )
+    return _embed_http_client
+async def _ollama_embed_one_async(prompt: str) -> List[float]:
+    client = await get_embed_http_client()
+
+    resp = await client.post(
+        f"{settings.embedding_base_url}/api/embeddings",
+        json={"model": settings.embedding_model, "prompt": prompt},
+    )
+    if resp.status_code == 200:
+        data = resp.json()
+        emb = data.get("embedding")
+        if emb:
+            return emb
+        raise RuntimeError(f"Empty embedding from Ollama ({settings.embedding_model})")
+
+    prompt2 = prompt[:EMBED_RETRY_CHARS]
+    resp2 = await client.post(
+        f"{settings.embedding_base_url}/api/embeddings",
+        json={"model": settings.embedding_model, "prompt": prompt2},
+    )
+    if resp2.status_code == 200:
+        data2 = resp2.json()
+        emb2 = data2.get("embedding")
+        if emb2:
+            return emb2
+        raise RuntimeError(f"Empty embedding (retry) from Ollama ({settings.embedding_model})")
+
+    raise RuntimeError(f"Embedding request failed: {resp.text}")
+async def ollama_embed_async(texts: List[str]) -> List[List[float]]:
+    out: List[List[float]] = []
+
+    for raw in texts:
+        t = _clamp_for_embed(raw)
+        if not t:
+            t = "empty"
+
+        key = _md5(t)
+        if key in _EMBED_CACHE:
+            out.append(_EMBED_CACHE[key])
+            continue
+
+        emb = await _ollama_embed_one_async(t)
+        _EMBED_CACHE[key] = emb
+        out.append(emb)
+
+    return out
+def _make_response_cache_key(question: str, top_k: int) -> str:
+    return hashlib.sha256(f"{question.strip().lower()}|{top_k}".encode()).hexdigest()
+
 
 from .config import settings
 from .firebase_kb import (
@@ -41,6 +105,98 @@ QUERY_DOC_MAX_CHARS = int(os.getenv("QUERY_DOC_MAX_CHARS", "1400"))
 
 _chroma_client = PersistentClient(path=settings.chroma_path)
 _collection = _chroma_client.get_or_create_collection("campus_kb")
+
+
+async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
+    cache_key = _make_response_cache_key(question, top_k)
+    if cache_key in _response_cache:
+        return _response_cache[cache_key]
+
+    if _REBUILDING:
+        return {"documents": [], "domain_score": 0.0, "in_domain": False}
+
+    t0 = time.perf_counter()
+
+    q = question or ""
+
+    t_embed0 = time.perf_counter()
+    q_emb = (await ollama_embed_async([q]))[0]
+    t_embed1 = time.perf_counter()
+
+    t_topic0 = time.perf_counter()
+    routed = await asyncio.to_thread(top_topics, q_emb, TOPIC_TOP_N)
+    max_topic_score = max((s for _, s in routed), default=0.0)
+    t_topic1 = time.perf_counter()
+
+    if max_topic_score < TOPIC_DOMAIN_GUARD:
+        result = {"documents": [], "domain_score": max_topic_score, "in_domain": False}
+        _response_cache[cache_key] = result
+        return result
+
+    routed_ids = [tid for tid, _ in routed]
+    candidates: List[Tuple[str, float]] = []
+    seen = set()
+
+    for doc_id in routed_ids[:2]:
+        it = _KB_BY_ID.get(doc_id)
+        if not it:
+            continue
+        doc = it.get("content", "") or ""
+        doc = _clamp_for_query(doc, max_chars=QUERY_DOC_MAX_CHARS)
+        if doc and doc not in seen:
+            seen.add(doc)
+            candidates.append((doc, 0.85))
+
+    t_dense0 = time.perf_counter()
+    try:
+        res = await asyncio.to_thread(
+            _collection.query,
+            query_embeddings=[q_emb],
+            n_results=top_k,
+            include=["documents", "distances"],
+        )
+        docs = res.get("documents", [[]])[0]
+        dists = res.get("distances", [[]])[0]
+        for doc, dist in zip(docs, dists):
+            if not doc or doc in seen:
+                continue
+            doc2 = _clamp_for_query(doc, max_chars=QUERY_DOC_MAX_CHARS)
+            if not doc2:
+                continue
+            seen.add(doc2)
+            sem_sim = 1.0 / (1.0 + float(dist))
+            candidates.append((doc2, sem_sim))
+    except Exception as e:
+        logger.warning(f"[RAG] Dense query failed: {e}")
+    t_dense1 = time.perf_counter()
+
+    if not candidates:
+        result = {"documents": [], "domain_score": max_topic_score, "in_domain": True}
+        _response_cache[cache_key] = result
+        return result
+
+    t_rerank0 = time.perf_counter()
+    best_docs = await asyncio.to_thread(rerank_documents, q, candidates)
+    t_rerank1 = time.perf_counter()
+
+    total = time.perf_counter() - t0
+
+    logger.info(
+        "[RAG_TIMING] "
+        f"embed={t_embed1 - t_embed0:.2f}s "
+        f"topic={t_topic1 - t_topic0:.2f}s "
+        f"dense={t_dense1 - t_dense0:.2f}s "
+        f"rerank={t_rerank1 - t_rerank0:.2f}s "
+        f"total={total:.2f}s"
+    )
+
+    result = {
+        "documents": best_docs,
+        "domain_score": max_topic_score,
+        "in_domain": True,
+    }
+    _response_cache[cache_key] = result
+    return result
 
 # -------------------- In-memory caches/indexes --------------------
 
