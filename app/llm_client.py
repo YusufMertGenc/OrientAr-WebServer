@@ -3,9 +3,11 @@ import re
 import time
 import asyncio
 import logging
+import hashlib
 from typing import List, Dict, Any, Optional
 
 import httpx
+from cachetools import TTLCache
 from .config import settings
 
 logger = logging.getLogger("orientar")
@@ -87,7 +89,8 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
 )
 
 _http_client: Optional[httpx.AsyncClient] = None
-_llm_semaphore = asyncio.Semaphore(4)  # 2 / 4 / 6 diye test et
+_llm_semaphore = asyncio.Semaphore(2)
+_llm_cache = TTLCache(maxsize=1000, ttl=600)
 
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -101,6 +104,11 @@ async def get_http_client() -> httpx.AsyncClient:
             ),
         )
     return _http_client
+
+
+def _make_llm_cache_key(question: str, context_passages: List[str]) -> str:
+    base = question.strip().lower() + "||" + "||".join((context_passages or []))
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
 def match_predefined_response(question: str) -> Optional[Dict[str, Any]]:
@@ -250,6 +258,11 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
 
 
 async def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
+    cache_key = _make_llm_cache_key(question, context_passages)
+    if cache_key in _llm_cache:
+        logger.info("[LLM] cache hit")
+        return _llm_cache[cache_key]
+
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -286,9 +299,12 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
 
                 try:
                     obj = json.loads(cleaned)
-                    return _normalize_llm_obj(obj)
+                    result = _normalize_llm_obj(obj)
                 except Exception:
-                    return _safe_fallback(raw)
+                    result = _safe_fallback(raw)
+
+                _llm_cache[cache_key] = result
+                return result
 
         except Exception as e:
             last_err = e
