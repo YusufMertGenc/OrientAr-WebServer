@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import ChatRequest, ChatResponse
-from .rag import rag_query_async
+from .rag import rag_query_async, load_kb_to_chroma, start_kb_watcher
 from .llm_client import (
     generate_intent_response,
     match_predefined_response,
@@ -26,6 +26,9 @@ active_requests = 0
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("[STARTUP] Loading KB to Chroma...")
+    load_kb_to_chroma()
+    start_kb_watcher(interval_sec=600)
     logger.info("[STARTUP] App is ready.")
     yield
     logger.info("[SHUTDOWN] App shutting down...")
@@ -33,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OrientAR Chatbot API",
-    version="0.7.1",
+    version="0.7.2",
     lifespan=lifespan
 )
 
