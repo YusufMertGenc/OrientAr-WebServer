@@ -383,18 +383,30 @@ def set_indexed_kb_version(kb_version: str):
 def load_kb_to_chroma(service_account_path: str | None = None):
     global _KB_BY_ID, _TOPIC_IDS, _TOPIC_TEXTS, _TOPIC_EMBS, _REBUILDING
 
+    print("STEP 1: load_kb_to_chroma started")
     _REBUILDING = True
     try:
+        print("STEP 2: init_firebase starting")
         init_firebase(service_account_path)
+        print("STEP 3: init_firebase done")
 
+        print("STEP 4: fetch_kb_version starting")
         kb_version = fetch_kb_version()
+        print("STEP 5: fetch_kb_version done")
+
+        print("STEP 6: fetch_kb_fingerprint starting")
         fp_count, fp_max_ut = fetch_kb_fingerprint()
+        print("STEP 7: fetch_kb_fingerprint done")
         kb_version_effective = f"{kb_version}|count={fp_count}|ut={fp_max_ut}"
 
+        print("STEP 8: fetch_kb_items starting")
         kb_items = fetch_kb_items()
+        print(f"STEP 9: fetch_kb_items done, item_count={len(kb_items) if kb_items else 0}")
+
         if not kb_items:
             raise RuntimeError("Firestore KB is empty (chatbot_kb_items).")
 
+        print("STEP 10: normalizing items")
         normalized: List[Dict] = []
         for it in kb_items:
             if it.get("isDeleted") is True:
@@ -405,41 +417,57 @@ def load_kb_to_chroma(service_account_path: str | None = None):
                 continue
             normalized.append(it)
 
+        print(f"STEP 11: normalization done, normalized_count={len(normalized)}")
+
         if not normalized:
             raise RuntimeError("Firestore KB has no active (non-deleted) items.")
 
-        _KB_BY_ID = {it["id"]: it for it in normalized}
+        _KB_BY_ID = {it['id']: it for it in normalized}
 
         _TOPIC_IDS = [it["id"] for it in normalized]
         _TOPIC_TEXTS = [_topic_text_from_item(it) for it in normalized]
-        _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
 
+        print(f"STEP 12: topic texts prepared, topic_count={len(_TOPIC_TEXTS)}")
+        print("STEP 13: topic embedding start")
+        _TOPIC_EMBS = ollama_embed(_TOPIC_TEXTS)
+        print("STEP 14: topic embedding done")
+
+        print("STEP 15: checking indexed version")
         indexed_version = get_indexed_kb_version()
         try:
             chroma_has_docs = _collection.count() > 0
         except Exception:
             chroma_has_docs = False
 
+        print(
+            f"STEP 16: version check done, "
+            f"indexed_version={indexed_version}, "
+            f"kb_version_effective={kb_version_effective}, "
+            f"chroma_has_docs={chroma_has_docs}"
+        )
+
         if chroma_has_docs and indexed_version == kb_version_effective:
             print(f"[RAG] Chroma up-to-date. kbVersion={kb_version_effective}. Skipping doc embedding build.")
+            print("STEP 17: early exit because chroma is up-to-date")
             return
 
         print(f"[RAG] Rebuilding Chroma. Firestore kbVersion={kb_version_effective}, indexed={indexed_version}, chroma_has_docs={chroma_has_docs}")
 
-        # Clear docs except META
+        print("STEP 18: clearing old docs from Chroma")
         try:
             existing = _collection.get(include=[])
             if existing.get("ids"):
                 ids_to_delete = [i for i in existing["ids"] if i != META_DOC_ID]
                 if ids_to_delete:
                     _collection.delete(ids=ids_to_delete)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"STEP 18B: delete old docs warning: {e}")
 
         ids: List[str] = []
         docs: List[str] = []
         metas: List[Dict] = []
 
+        print("STEP 19: preparing docs/metas for Chroma")
         for it in normalized:
             doc_id = str(it.get("id", "")).strip()
             if not doc_id:
@@ -466,29 +494,42 @@ def load_kb_to_chroma(service_account_path: str | None = None):
             docs.append(doc_text)
             metas.append(_sanitize_meta(raw_meta))
 
+        print(f"STEP 20: docs prepared, doc_count={len(docs)}")
+
         if not ids:
             raise RuntimeError("[RAG] No valid docs to index after normalization.")
 
+        print("STEP 21: doc embedding start")
         doc_embeddings = ollama_embed(docs)
+        print("STEP 22: doc embedding done")
 
         if not (len(ids) == len(docs) == len(metas) == len(doc_embeddings)):
             raise RuntimeError(
                 f"[RAG] Alignment mismatch ids={len(ids)} docs={len(docs)} metas={len(metas)} embs={len(doc_embeddings)}"
             )
 
+        print("STEP 23: adding docs to Chroma")
         _collection.add(
             ids=ids,
             documents=docs,
             metadatas=metas,
             embeddings=doc_embeddings,
         )
+        print("STEP 24: Chroma add done")
 
+        print("STEP 25: setting indexed kb version")
         set_indexed_kb_version(kb_version_effective)
+
         print("[RAG] CHROMA COUNT AFTER LOAD:", _collection.count())
+        print("STEP 26: load_kb_to_chroma finished successfully")
+
+    except Exception as e:
+        print(f"STEP ERROR: load_kb_to_chroma failed with error: {e}")
+        raise
 
     finally:
         _REBUILDING = False
-
+        print("STEP FINAL: _REBUILDING set to False")
 
 # -------------------- Topic routing --------------------
 
