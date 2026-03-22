@@ -27,7 +27,8 @@ Rules:
 - Use ONLY the provided context.
 - Do NOT invent facts that are not in the context.
 - Keep answers concise, helpful, and focused.
-- Usually answer in 2-5 sentences unless listing items from context is necessary.
+- Answer in 2-3 complete sentences unless a short list is necessary.
+- Do not leave sentences unfinished.
 - If the context is insufficient, say so briefly.
 - Never output markdown.
 - Never output code fences.
@@ -89,8 +90,8 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
 )
 
 _http_client: Optional[httpx.AsyncClient] = None
-_llm_semaphore = asyncio.Semaphore(4)
-_llm_cache = TTLCache(maxsize=1000, ttl=600)
+_llm_semaphore = asyncio.Semaphore(2)
+
 
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -258,11 +259,6 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
 
 
 async def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
-    cache_key = _make_llm_cache_key(question, context_passages)
-    if cache_key in _llm_cache:
-        logger.info("[LLM] cache hit")
-        return _llm_cache[cache_key]
-
     payload = {
         "model": settings.llm_model,
         "messages": [
@@ -303,7 +299,6 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
                 except Exception:
                     result = _safe_fallback(raw)
 
-                _llm_cache[cache_key] = result
                 return result
 
         except Exception as e:

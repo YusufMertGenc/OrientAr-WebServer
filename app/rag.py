@@ -29,7 +29,7 @@ logger = logging.getLogger("orientar")
 # -------------------- HTTP / caches --------------------
 
 _embed_http_client: Optional[httpx.AsyncClient] = None
-_response_cache = TTLCache(maxsize=1000, ttl=600)  # 10 dk
+
 
 # -------------------- Constants / Tunables --------------------
 
@@ -513,9 +513,7 @@ def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[st
 
 
 async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
-    cache_key = _make_response_cache_key(question, top_k)
-    if cache_key in _response_cache:
-        return _response_cache[cache_key]
+    
 
     if _REBUILDING:
         return {"documents": [], "domain_score": 0.0, "in_domain": False}
@@ -534,7 +532,6 @@ async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
 
     if max_topic_score < TOPIC_DOMAIN_GUARD:
         result = {"documents": [], "domain_score": max_topic_score, "in_domain": False}
-        _response_cache[cache_key] = result
         return result
 
     routed_ids = [tid for tid, _ in routed]
@@ -577,7 +574,7 @@ async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
 
     if not candidates:
         result = {"documents": [], "domain_score": max_topic_score, "in_domain": True}
-        _response_cache[cache_key] = result
+        
         return result
 
     t_rerank0 = time.perf_counter()
@@ -600,7 +597,6 @@ async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
         "domain_score": max_topic_score,
         "in_domain": True,
     }
-    _response_cache[cache_key] = result
     return result
 
 
