@@ -7,7 +7,6 @@ import hashlib
 from typing import List, Dict, Any, Optional
 
 import httpx
-from cachetools import TTLCache
 from .config import settings
 
 logger = logging.getLogger("orientar")
@@ -90,8 +89,7 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
 )
 
 _http_client: Optional[httpx.AsyncClient] = None
-_llm_semaphore = asyncio.Semaphore(2)
-
+_llm_semaphore = asyncio.Semaphore(settings.llm_max_concurrency)
 
 
 async def get_http_client() -> httpx.AsyncClient:
@@ -278,7 +276,9 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
 
     for attempt in range(3):
         try:
+            queue_wait_started = time.perf_counter()
             async with _llm_semaphore:
+                queue_wait = time.perf_counter() - queue_wait_started
                 started = time.perf_counter()
 
                 resp = await client.post(
@@ -291,7 +291,10 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
                 cleaned = _clean_json_string(raw)
 
                 duration = time.perf_counter() - started
-                logger.info(f"[LLM] duration={duration:.2f}s attempt={attempt+1}")
+                logger.info(
+                    f"[LLM] wait={queue_wait:.2f}s duration={duration:.2f}s "
+                    f"attempt={attempt+1}"
+                )
 
                 try:
                     obj = json.loads(cleaned)

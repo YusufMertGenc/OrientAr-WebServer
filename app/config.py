@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     llm_base_url: str
     llm_model: str
@@ -11,6 +12,10 @@ class Settings(BaseSettings):
     firebase_sa_b64: Optional[str] = None
     google_application_credentials: Optional[str] = None
 
+    # New concurrency settings
+    llm_max_concurrency: int = 2
+    embed_max_concurrency: int = 4
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore"
@@ -19,5 +24,6 @@ class Settings(BaseSettings):
     @property
     def chroma_path(self) -> str:
         return str(Path(self.chroma_dir).resolve())
+
 
 settings = Settings()

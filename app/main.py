@@ -4,6 +4,7 @@ import time
 import uuid
 import traceback
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -22,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orientar")
 
 active_requests = 0
+active_requests_lock = asyncio.Lock()
 
 
 @asynccontextmanager
@@ -36,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OrientAR Chatbot API",
-    version="0.7.2",
+    version="0.7.3",
     lifespan=lifespan
 )
 
@@ -54,11 +56,14 @@ async def metrics_middleware(request: Request, call_next):
     global active_requests
     request_id = str(uuid.uuid4())[:8]
     start = time.perf_counter()
-    active_requests += 1
+
+    async with active_requests_lock:
+        active_requests += 1
+        current_active = active_requests
 
     logger.info(
         f"[REQ_START] id={request_id} path={request.url.path} "
-        f"method={request.method} active={active_requests}"
+        f"method={request.method} active={current_active}"
     )
 
     try:
@@ -66,10 +71,14 @@ async def metrics_middleware(request: Request, call_next):
         return response
     finally:
         duration = time.perf_counter() - start
-        active_requests -= 1
+
+        async with active_requests_lock:
+            active_requests -= 1
+            current_active = active_requests
+
         logger.info(
             f"[REQ_END] id={request_id} path={request.url.path} "
-            f"duration={duration:.2f}s active={active_requests}"
+            f"duration={duration:.2f}s active={current_active}"
         )
 
 

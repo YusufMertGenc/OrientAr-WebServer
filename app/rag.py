@@ -13,7 +13,6 @@ from typing import Dict, List, Tuple, Optional
 
 import httpx
 import requests
-from cachetools import TTLCache
 from chromadb import PersistentClient
 
 from .config import settings
@@ -29,7 +28,7 @@ logger = logging.getLogger("orientar")
 # -------------------- HTTP / caches --------------------
 
 _embed_http_client: Optional[httpx.AsyncClient] = None
-
+_embed_semaphore = asyncio.Semaphore(settings.embed_max_concurrency)
 
 # -------------------- Constants / Tunables --------------------
 
@@ -190,30 +189,39 @@ async def get_embed_http_client() -> httpx.AsyncClient:
 async def _ollama_embed_one_async(prompt: str) -> List[float]:
     client = await get_embed_http_client()
 
-    resp = await client.post(
-        f"{settings.embedding_base_url}/api/embeddings",
-        json={"model": settings.embedding_model, "prompt": prompt},
-    )
-    if resp.status_code == 200:
-        data = resp.json()
-        emb = data.get("embedding")
-        if emb:
-            return emb
-        raise RuntimeError(f"Empty embedding from Ollama ({settings.embedding_model})")
+    queue_wait_started = time.perf_counter()
+    async with _embed_semaphore:
+        queue_wait = time.perf_counter() - queue_wait_started
+        started = time.perf_counter()
 
-    prompt2 = prompt[:EMBED_RETRY_CHARS]
-    resp2 = await client.post(
-        f"{settings.embedding_base_url}/api/embeddings",
-        json={"model": settings.embedding_model, "prompt": prompt2},
-    )
-    if resp2.status_code == 200:
-        data2 = resp2.json()
-        emb2 = data2.get("embedding")
-        if emb2:
-            return emb2
-        raise RuntimeError(f"Empty embedding (retry) from Ollama ({settings.embedding_model})")
+        resp = await client.post(
+            f"{settings.embedding_base_url}/api/embeddings",
+            json={"model": settings.embedding_model, "prompt": prompt},
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            emb = data.get("embedding")
+            if emb:
+                duration = time.perf_counter() - started
+                logger.info(f"[EMBED] wait={queue_wait:.2f}s duration={duration:.2f}s")
+                return emb
+            raise RuntimeError(f"Empty embedding from Ollama ({settings.embedding_model})")
 
-    raise RuntimeError(f"Embedding request failed: {resp.text}")
+        prompt2 = prompt[:EMBED_RETRY_CHARS]
+        resp2 = await client.post(
+            f"{settings.embedding_base_url}/api/embeddings",
+            json={"model": settings.embedding_model, "prompt": prompt2},
+        )
+        if resp2.status_code == 200:
+            data2 = resp2.json()
+            emb2 = data2.get("embedding")
+            if emb2:
+                duration = time.perf_counter() - started
+                logger.info(f"[EMBED] wait={queue_wait:.2f}s duration={duration:.2f}s retry=1")
+                return emb2
+            raise RuntimeError(f"Empty embedding (retry) from Ollama ({settings.embedding_model})")
+
+        raise RuntimeError(f"Embedding request failed: {resp.text}")
 
 
 async def ollama_embed_async(texts: List[str]) -> List[List[float]]:
@@ -513,8 +521,6 @@ def rerank_documents(query: str, candidates: List[Tuple[str, float]]) -> List[st
 
 
 async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
-    
-
     if _REBUILDING:
         return {"documents": [], "domain_score": 0.0, "in_domain": False}
 
@@ -574,7 +580,6 @@ async def rag_query_async(question: str, top_k: int = DENSE_TOP_K) -> Dict:
 
     if not candidates:
         result = {"documents": [], "domain_score": max_topic_score, "in_domain": True}
-        
         return result
 
     t_rerank0 = time.perf_counter()
