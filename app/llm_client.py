@@ -91,6 +91,10 @@ _RE_NEAR_JSON_MESSAGE = re.compile(
 _http_client: Optional[httpx.AsyncClient] = None
 _llm_semaphore = asyncio.Semaphore(settings.llm_max_concurrency)
 
+# round-robin state
+_llm_rr_index = 0
+_llm_rr_lock = asyncio.Lock()
+
 
 async def get_http_client() -> httpx.AsyncClient:
     global _http_client
@@ -256,6 +260,34 @@ def _normalize_llm_obj(obj) -> Dict[str, Any]:
     return {"message": s, "confidence": conf}
 
 
+async def _get_llm_urls_in_order() -> List[str]:
+    global _llm_rr_index
+    urls = settings.llm_base_url_list
+
+    if not urls:
+        raise RuntimeError("No LLM base URLs configured.")
+
+    async with _llm_rr_lock:
+        start_idx = _llm_rr_index % len(urls)
+        _llm_rr_index = (_llm_rr_index + 1) % len(urls)
+
+    ordered = urls[start_idx:] + urls[:start_idx]
+    return ordered
+
+
+async def _post_to_llm(
+    client: httpx.AsyncClient,
+    base_url: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    resp = await client.post(
+        f"{base_url}/api/chat",
+        json=payload,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 async def generate_intent_response(question: str, context_passages: List[str]) -> Dict[str, Any]:
     payload = {
         "model": settings.llm_model,
@@ -265,7 +297,7 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
         ],
         "temperature": 0.15,
         "options": {
-            "num_ctx": 1280,
+            "num_ctx": 960,
             "num_predict": 120,
         },
         "stream": False,
@@ -275,39 +307,47 @@ async def generate_intent_response(question: str, context_passages: List[str]) -
     client = await get_http_client()
 
     for attempt in range(3):
+        urls = await _get_llm_urls_in_order()
+
         try:
             queue_wait_started = time.perf_counter()
             async with _llm_semaphore:
                 queue_wait = time.perf_counter() - queue_wait_started
-                started = time.perf_counter()
 
-                resp = await client.post(
-                    f"{settings.llm_base_url}/api/chat",
-                    json=payload,
-                )
-                resp.raise_for_status()
+                for base_url in urls:
+                    started = time.perf_counter()
+                    try:
+                        data = await _post_to_llm(client, base_url, payload)
 
-                raw = resp.json()["message"]["content"]
-                cleaned = _clean_json_string(raw)
+                        raw = data["message"]["content"]
+                        cleaned = _clean_json_string(raw)
 
-                duration = time.perf_counter() - started
-                logger.info(
-                    f"[LLM] wait={queue_wait:.2f}s duration={duration:.2f}s "
-                    f"attempt={attempt+1}"
-                )
+                        duration = time.perf_counter() - started
+                        logger.info(
+                            f"[LLM] url={base_url} wait={queue_wait:.2f}s "
+                            f"duration={duration:.2f}s attempt={attempt+1}"
+                        )
 
-                try:
-                    obj = json.loads(cleaned)
-                    result = _normalize_llm_obj(obj)
-                except Exception:
-                    result = _safe_fallback(raw)
+                        try:
+                            obj = json.loads(cleaned)
+                            result = _normalize_llm_obj(obj)
+                        except Exception:
+                            result = _safe_fallback(raw)
 
-                return result
+                        return result
+
+                    except Exception as e:
+                        last_err = e
+                        logger.warning(
+                            f"[LLM] url={base_url} attempt={attempt+1} error={repr(e)}"
+                        )
+                        continue
 
         except Exception as e:
             last_err = e
-            logger.warning(f"[LLM] attempt={attempt+1} error={repr(e)}")
-            await asyncio.sleep(0.5 * (attempt + 1))
+            logger.warning(f"[LLM] outer attempt={attempt+1} error={repr(e)}")
+
+        await asyncio.sleep(0.5 * (attempt + 1))
 
     return {
         "message": "Temporary error while answering. Please retry.",

@@ -37,7 +37,7 @@ EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "1200"))
 TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "250"))
 
 TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "4"))
-TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.38"))
+TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.60"))
 
 DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "5"))
 FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))

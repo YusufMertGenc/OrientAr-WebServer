@@ -102,6 +102,17 @@ async def chatbot_query(req: ChatRequest):
     started = time.perf_counter()
     question = req.question.strip()
 
+    if not question:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return ChatResponse(
+            answer="Please enter a campus-related question.",
+            confidence=0.0,
+            context_used=[],
+            latency_ms=latency_ms,
+            domain_score=0.0,
+            in_domain=False,
+        )
+
     predefined = match_predefined_response(question)
     if predefined:
         latency_ms = int((time.perf_counter() - started) * 1000)
