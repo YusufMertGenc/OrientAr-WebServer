@@ -37,7 +37,7 @@ EMBED_RETRY_CHARS = int(os.getenv("EMBED_RETRY_CHARS", "1200"))
 TOPIC_SNIPPET_CHARS = int(os.getenv("TOPIC_SNIPPET_CHARS", "250"))
 
 TOPIC_TOP_N = int(os.getenv("TOPIC_TOP_N", "4"))
-TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.60"))
+TOPIC_DOMAIN_GUARD = float(os.getenv("TOPIC_DOMAIN_GUARD", "0.50"))
 
 DENSE_TOP_K = int(os.getenv("DENSE_TOP_K", "5"))
 FINAL_DOCS = int(os.getenv("FINAL_DOCS", "3"))
@@ -122,6 +122,57 @@ def _norm_ws(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
+def normalize_llm_answer(raw_answer: str) -> str:
+    """
+    LLM bazen plain text yerine JSON string döndürüyor:
+    {"message": "..."} veya {"answer": "..."}
+
+    Bu fonksiyon API'nin answer alanına sadece gerçek cevabı koymak için temizler.
+    """
+    if raw_answer is None:
+        return ""
+
+    text = str(raw_answer).strip()
+
+    if not text:
+        return ""
+
+    # ```json ... ``` veya ``` ... ``` gelirse temizle
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text).strip()
+
+    # Direkt JSON parse dene
+    try:
+        parsed = json.loads(text)
+
+        if isinstance(parsed, dict):
+            for key in ["answer", "message", "response", "text"]:
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+        if isinstance(parsed, str):
+            return parsed.strip()
+
+    except Exception:
+        pass
+
+    # Bazen JSON'un etrafında ekstra metin olabilir, içinden JSON objesini yakala
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if match:
+        try:
+            parsed = json.loads(match.group(0))
+
+            if isinstance(parsed, dict):
+                for key in ["answer", "message", "response", "text"]:
+                    value = parsed.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+
+        except Exception:
+            pass
+
+    return text
 
 def _clamp_for_embed(text: str, max_chars: int = EMBED_MAX_CHARS) -> str:
     t = _norm_ws(text)

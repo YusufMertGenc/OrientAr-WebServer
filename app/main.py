@@ -166,9 +166,11 @@ async def chatbot_query(req: ChatRequest):
 
     latency_ms = int((time.perf_counter() - started) * 1000)
 
-    answer = final_answer_cleanup(str(llm_json.get("message", "")))
-    confidence = float(llm_json.get("confidence", 0.5))
-
+    answer = extract_answer_from_llm_result(llm_json)
+    confidence = safe_float(
+        llm_json.get("confidence", 0.5) if isinstance(llm_json, dict) else 0.5,
+        default=0.5
+    )
     if not answer:
         answer = "I’m not sure based on the available campus information."
         confidence = 0.25
@@ -188,29 +190,187 @@ async def chatbot_query(req: ChatRequest):
     )
 
 
-def final_answer_cleanup(text: str) -> str:
-    s = (text or "").strip()
-    s = s.strip(' "\'')
+def safe_float(value, default: float = 0.5) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
 
-    if '\\"message\\"' in s or s.startswith('{\\'):
+
+def safe_float(value, default: float = 0.5) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def extract_answer_from_llm_result(llm_result) -> str:
+    """
+    generate_intent_response bazen şöyle dönebiliyor:
+
+    1) {"message": "normal answer", "confidence": 0.8}
+    2) {"message": "{\"message\": \"actual answer\", \"confidence\": 0.3}"}
+    3) "{\"message\": \"actual answer\", \"confidence\": 0.3}"
+    4) { \"message\": \"actual answer\", ... } gibi bozuk/escaped JSON string
+
+    Bu fonksiyon hepsinden sadece gerçek answer metnini çıkarır.
+    """
+    if llm_result is None:
+        return ""
+
+    if isinstance(llm_result, dict):
+        for key in ["message", "answer", "response", "text"]:
+            value = llm_result.get(key)
+            if value:
+                cleaned = final_answer_cleanup(value)
+                if cleaned:
+                    return cleaned
+        return ""
+
+    return final_answer_cleanup(llm_result)
+
+
+def final_answer_cleanup(raw_answer) -> str:
+    if raw_answer is None:
+        return ""
+
+    s = str(raw_answer).strip()
+    if not s:
+        return ""
+
+    # Markdown code block temizliği
+    s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s*```$", "", s).strip()
+
+    # Dış tırnak temizliği
+    s = s.strip()
+
+    # 1) Normal JSON parse
+    parsed = try_parse_json_answer(s)
+    if parsed:
+        return parsed
+
+    # 2) Eğer JSON string olarak encode edilmişse birkaç kez çözmeyi dene
+    current = s
+    for _ in range(3):
         try:
-            s2 = s.replace('\\"', '"')
-            obj = json.loads(s2)
-            if isinstance(obj, dict) and "message" in obj:
-                s = str(obj["message"]).strip()
+            decoded = json.loads(current)
+            if isinstance(decoded, str):
+                current = decoded.strip()
+                parsed = try_parse_json_answer(current)
+                if parsed:
+                    return parsed
+            elif isinstance(decoded, dict):
+                parsed = extract_answer_from_llm_result(decoded)
+                if parsed:
+                    return parsed
+                break
+            else:
+                break
         except Exception:
-            pass
+            break
 
-    if s.startswith("{") and '"message"' in s:
-        try:
-            obj = json.loads(s)
-            if isinstance(obj, dict) and "message" in obj:
-                s = str(obj["message"]).strip()
-        except Exception:
-            m = re.search(r'"message"\s*:\s*"(.+?)"', s)
-            if m:
-                s = m.group(1).strip()
+    # 3) Escaped quote temizliği: { \"message\": \"...\" }
+    unescaped = (
+        s.replace('\\"', '"')
+         .replace("\\n", "\n")
+         .replace("\\r", "\r")
+         .replace("\\t", "\t")
+         .strip()
+    )
 
-    s = re.sub(r"\s+", " ", s).strip()
-    s = s.lstrip('"').strip()
+    parsed = try_parse_json_answer(unescaped)
+    if parsed:
+        return parsed
+
+    # 4) JSON bozuk/truncated ise regex ile message içeriğini çıkar
+    regex_answer = extract_answer_by_regex(unescaped)
+    if regex_answer:
+        return regex_answer
+
+    regex_answer = extract_answer_by_regex(s)
+    if regex_answer:
+        return regex_answer
+
+    # 5) Son fallback: baştaki JSON field adını elle kırp
+    fallback = strip_leading_json_message_wrapper(unescaped)
+    fallback = fallback.strip()
+    fallback = fallback.strip(' "\'')
+    fallback = re.sub(r"\s+", " ", fallback).strip()
+
+    return fallback
+
+
+def try_parse_json_answer(s: str) -> str:
+    try:
+        obj = json.loads(s)
+    except Exception:
+        return ""
+
+    if isinstance(obj, dict):
+        for key in ["message", "answer", "response", "text"]:
+            value = obj.get(key)
+            if isinstance(value, str) and value.strip():
+                return final_answer_cleanup(value)
+
+    if isinstance(obj, str) and obj.strip():
+        return final_answer_cleanup(obj)
+
+    return ""
+
+
+def extract_answer_by_regex(s: str) -> str:
+    """
+    Geçerli JSON değilse bile şunları yakalar:
+    { "message": "....", "confidence": 0.3 }
+    { \"message\": \"....\", \"confidence\": 0.3 }
+    Truncated durumda confidence yoksa bile message sonrası metni alır.
+    """
+    if not s:
+        return ""
+
+    patterns = [
+        r'"(?:message|answer|response|text)"\s*:\s*"(.+?)"\s*,\s*"(?:confidence|context_used|latency_ms|domain_score|in_domain)"',
+        r'"(?:message|answer|response|text)"\s*:\s*"(.+?)"\s*\}',
+        r'"(?:message|answer|response|text)"\s*:\s*"(.+)$',
+    ]
+
+    for pattern in patterns:
+        m = re.search(pattern, s, flags=re.DOTALL)
+        if m:
+            value = m.group(1)
+            value = value.replace('\\"', '"')
+            value = value.replace("\\n", " ")
+            value = value.replace("\\r", " ")
+            value = value.replace("\\t", " ")
+            value = re.sub(r'"\s*,\s*"confidence"\s*:\s*[\d.]+.*$', "", value, flags=re.DOTALL)
+            value = re.sub(r"\s+", " ", value).strip()
+            value = value.strip(' "\'{}')
+            return value
+
+    return ""
+
+
+def strip_leading_json_message_wrapper(s: str) -> str:
+    """
+    Son çare:
+    { "message": "bla bla
+    gibi kalan wrapper'ı kırpar.
+    """
+    s = s.strip()
+
+    s = re.sub(
+        r'^\{\s*"?(?:message|answer|response|text)"?\s*:\s*"?',
+        "",
+        s,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    s = re.sub(
+        r'"\s*,\s*"?confidence"?\s*:\s*[\d.]+.*$',
+        "",
+        s,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
     return s
